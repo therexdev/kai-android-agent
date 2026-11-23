@@ -1,0 +1,62 @@
+name: Import verified release source
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag containing the signed APK and matching source archive
+        required: true
+        default: v0.4.28
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download and verify matching source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-source.zip' --pattern '*-SHA256SUMS.txt' --dir "$RUNNER_TEMP/kai-release"
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, os, zipfile
+          downloads=Path(os.environ['RUNNER_TEMP'])/'kai-release'
+          version=os.environ['RELEASE_TAG'][1:]
+          source=downloads/f'KAI-Android-{version}-source.zip'
+          sums=downloads/f'KAI-Android-{version}-SHA256SUMS.txt'
+          expected={line.split()[1]:line.split()[0] for line in sums.read_text().splitlines() if line.strip()}
+          assert hashlib.sha256(source.read_bytes()).hexdigest()==expected[source.name], 'Source checksum mismatch'
+          with zipfile.ZipFile(source) as archive:
+              for entry in archive.infolist():
+                  path=PurePosixPath(entry.filename)
+                  assert not path.is_absolute() and '..' not in path.parts and path.parts[0]=='kai-android', 'Unsafe source path'
+                  assert not any(part in ('.git','.gradle','.kotlin','build') for part in path.parts), 'Excluded source directory'
+                  assert path.suffix.lower() not in ('.jks','.keystore','.apk','.idsig'), 'Private or generated file in source'
+                  assert path.name not in ('local.properties','signing.properties'), 'Local build configuration in source'
+              archive.extractall(downloads/'extracted')
+          print('Source SHA-256 verified')
+          PY
+          cp -a "$RUNNER_TEMP/kai-release/extracted/kai-android/." .
+      - name: Commit Android source to this repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .gitignore AGENTS.md README.md VALIDATION.md app build.gradle.kts settings.gradle.kts gradle.properties gradle gradlew gradlew.bat docs qa desktop-voice-catalog.json
+          git update-index --chmod=+x gradlew
+          if ! git diff --cached --quiet; then
+            git commit -m "Import verified kai Android release source"
+            git push origin HEAD:main
+          fi
