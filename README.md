@@ -4,9 +4,12 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Current release: 0.4.28
+## Current release: 0.4.29
 
-- Model selection is a compact dropdown in **Account**.
+- **Use purchased credits** enables paid balances from credit accounts connected to your website login, including linked Core wallets.
+- **Automatic · connected accounts** follows your primary credit account and can choose another linked account that can cover a request. Select a specific account to pin its balance.
+- The balance display loads the primary connected account instead of showing an unrelated zero balance. Each request uses one account; balances are not pooled.
+- Model selection remains a compact dropdown in **Account**.
 - **GPT OSS 120B** is the default for new sign-ins and previously empty model selections.
 - An existing saved model choice is preserved. Choosing a different model saves it for future chats and tasks.
 - The dropdown shows model availability; unavailable models cannot be selected. Free-credit eligibility and input/output token prices remain visible for the selected model.
@@ -30,18 +33,18 @@ The phone owns conversation history, memory, task records, files, and permission
 
 ## Install or update
 
-1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download `KAI-Android-0.4.28.apk`.
+1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download `KAI-Android-0.4.29.apk`.
 2. Open the APK on an **ARM64 Android 9 or newer** device. If Android asks, allow installation from the app you used to download it.
 3. Install over the existing **kai** app. Keep the existing installation to retain its encrypted local data.
 4. Open **Account** in the top bar, choose **Sign in / Create account**, and complete email or Google sign-in in your browser.
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **35**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **36**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 
-Sign in with the same account you use on the Koinos AI website. Free allowance and purchased credits are shown separately. To spend purchased credits, select their linked wallet and turn off **Use free credits only**. Prices are quoted in credits per million input/output model tokens.
+Sign in with the same account you use on the Koinos AI website. Free allowance and purchased credits are shown separately. To spend purchased credits, open **Account**, leave **Credit source** on **Automatic · connected accounts** or pick a specific connected account, and enable **Use purchased credits**. Free credits are used first, with purchased credits covering the rest. The choice applies to chats, saved tasks, and automatic memory processing. Changing the selected credit account turns paid usage off until you enable it for that choice. Prices are quoted in credits per million input/output model tokens.
 
 Wallet connection and credit purchases open the website account in the system browser. KOIN Vault controls wallet approvals; the app enables the Vault button when the account service advertises support.
 
@@ -55,7 +58,7 @@ Microphone use is explicit and stops when the app leaves the foreground. Android
 
 ## Source and development
 
-This repository contains the standalone Android project. Release assets include the signed ARM64 APK, matching source archive, and SHA-256 checksums.
+This repository contains the standalone Android project. Releases provide the signed ARM64 APK and matching GitHub source archives. SHA-256 verification details appear in the release notes or an attached checksum file.
 
 Use JDK 17 or 21, Android SDK platform 36 / build-tools 36.0.0, and the checked-in Gradle 8.13 wrapper. Configure `sdk.dir` in your local `local.properties` or set `ANDROID_HOME`.
 
@@ -68,6 +71,7 @@ Use JDK 17 or 21, Android SDK platform 36 / build-tools 36.0.0, and the checked-
 
 ## Documentation
 
+- [Using connected paid credits](docs/PAID-CREDITS.md)
 - [Account, models, and credits](docs/ACCOUNT-AND-CREDITS.md)
 - [Connections setup](docs/COMPOSIO-SETUP.md)
 - [Conversations and workspace](docs/CONVERSATION-AND-WORKSPACE.md)
@@ -75,6 +79,6 @@ Use JDK 17 or 21, Android SDK platform 36 / build-tools 36.0.0, and the checked-
 - [Web research](docs/WEB-RESEARCH-AND-CORE.md)
 - [Chat reports](docs/CHAT-REPORTS.md)
 - [Build history](docs/BUILD-HISTORY.md)
-- [0.4.28 validation](qa/0.4.28/VALIDATION.md)
+- [0.4.29 validation](qa/0.4.29/VALIDATION.md)
 
 Bundled third-party notices are retained with their assets under `app/src/main/assets`; the isolated speech runtime remains under `app/libs`.

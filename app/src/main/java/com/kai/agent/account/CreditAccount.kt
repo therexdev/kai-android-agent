@@ -31,7 +31,12 @@ data class CreditAccount(
 data class CreditModel(val id: String,val label: String,val available: Boolean,val freeEligible: Boolean,
     val maxOutput: Int,val contextTokens: Int,val inputPrice: String,val outputPrice: String)
 data class AccountOverview(val id: String,val email: String,val wallets: List<String>,val selectedWallet: String,
-    val freeCredits: String,val paidCredits: String,val freeState: String,val models: List<CreditModel>,val vaultAvailable: Boolean=false)
+    val freeCredits: String,val paidCredits: String,val freeState: String,val models: List<CreditModel>,val vaultAvailable: Boolean=false,
+    val primaryCreditWallet: String="",val walletLabels: Map<String,String> = emptyMap()) {
+    fun walletLabel(address: String): String = walletLabels[address]?.takeIf { it.isNotBlank() } ?: address
+    fun allowsPurchasedCredits(account: CreditAccount): Boolean = id==account.id && wallets.isNotEmpty() &&
+        (account.wallet.isBlank() || account.wallet in wallets)
+}
 data class AccountUi(val signedIn: Boolean=false,val email: String="",val busy: Boolean=false,val code: String="",
     val message: String="Sign in to use your website credits and available models.",val overview: AccountOverview?=null,
     val model: String="",val wallet: String="",val freeOnly: Boolean=true)

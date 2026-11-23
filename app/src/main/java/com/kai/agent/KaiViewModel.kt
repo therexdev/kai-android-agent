@@ -151,12 +151,13 @@ class KaiViewModel(
     }
     override fun accountSelectWallet(address: String) {
         if(address.isNotBlank() && creditOverview?.wallets?.contains(address)!=true)return
+        if(address==store.state.value.settings.creditAccount.wallet)return
         stopGeneration();memoryRuntime.pause();creditJob?.cancel();creditEpoch++
         safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(wallet=address,freeOnly=true)) }
             creditOverview=null;mutableUi.update { it.copy(account=it.account.copy(overview=null)) };accountRefresh() }
     }
     override fun accountFreeOnly(enabled: Boolean) {
-        if(!enabled && store.state.value.settings.creditAccount.wallet.isBlank())return
+        if(!enabled && creditOverview?.allowsPurchasedCredits(store.state.value.settings.creditAccount)!=true)return
         stopGeneration();memoryRuntime.pause()
         safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(freeOnly=enabled)) };memoryRuntime.kick() }
     }

@@ -14,6 +14,77 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CreditAccountTest {
+    private fun overviewFixture(wallet: String?=null,primary: String="wallet-B",paid: String="0",linked: Boolean=true): String = JSONObject()
+        .put("account",JSONObject().put("id","alice").put("email","alice@example.test").put("primaryCreditWallet",primary)
+            .put("wallets",org.json.JSONArray().apply { if(linked) {
+                put(JSONObject().put("address","wallet-A").put("label","Website wallet"))
+                put(JSONObject().put("address","wallet-B").put("label","Core credits").put("creditAccessOnly",true))
+            } }))
+        .put("selectedWallet",wallet ?: JSONObject.NULL)
+        .put("credits",JSONObject().put("free",JSONObject().put("available","100000").put("state","available"))
+            .put("purchased",JSONObject().put("available",paid)))
+        .put("models",org.json.JSONArray().put(JSONObject().put("model",DEFAULT_CREDIT_MODEL).put("label","GPT OSS 120B")
+            .put("available",true).put("freeEligible",true).put("maxOutput",8192).put("contextTokens",131072)))
+        .toString()
+
+    @Test fun automaticOverviewShowsPrimaryConnectedPaidBalanceWithoutPinningTheSavedSource() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(overviewFixture()))
+            server.enqueue(MockResponse().setBody(overviewFixture("wallet-B",paid="200000000")))
+            val account=CreditAccount(token="fixture-account-session",id="alice")
+            val overview=CreditAccountClient(server.url("/").toString().trimEnd('/')).overview(account)
+            assertEquals("wallet-B",overview.selectedWallet);assertEquals("wallet-B",overview.primaryCreditWallet)
+            assertEquals("2000",creditAmount(overview.paidCredits));assertEquals("Core credits",overview.walletLabel("wallet-B"))
+            assertEquals("",account.wallet);assertTrue(overview.allowsPurchasedCredits(account))
+            assertNull(server.takeRequest().requestUrl!!.queryParameter("wallet"))
+            assertEquals("wallet-B",server.takeRequest().requestUrl!!.queryParameter("wallet"))
+        }
+    }
+    @Test fun explicitCreditSourceNeverSwitchesToAnotherConnectedAccount() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(overviewFixture("wallet-A",paid="300000")))
+            val overview=CreditAccountClient(server.url("/").toString().trimEnd('/'))
+                .overview(CreditAccount(token="fixture-account-session",id="alice",wallet="wallet-A",freeOnly=false))
+            assertEquals("wallet-A",overview.selectedWallet);assertEquals("3",creditAmount(overview.paidCredits))
+            assertEquals(1,server.requestCount);assertEquals("wallet-A",server.takeRequest().requestUrl!!.queryParameter("wallet"))
+            assertFalse(overview.allowsPurchasedCredits(CreditAccount(id="another-account",wallet="wallet-A")))
+            assertFalse(overview.allowsPurchasedCredits(CreditAccount(id="alice",wallet="unlinked-wallet")))
+        }
+    }
+    @Test fun invalidPrimaryCanNeverSelectAnUnlinkedCreditAccount() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(overviewFixture(primary="unlinked-wallet")))
+            server.enqueue(MockResponse().setBody(overviewFixture("wallet-A",primary="unlinked-wallet")))
+            val overview=CreditAccountClient(server.url("/").toString().trimEnd('/')).overview(CreditAccount(token="fixture-session",id="alice"))
+            assertEquals("",overview.primaryCreditWallet);server.takeRequest()
+            assertEquals("wallet-A",server.takeRequest().requestUrl!!.queryParameter("wallet"))
+        }
+    }
+    @Test fun accountWithoutConnectedWalletsRemainsFreeOnly() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(overviewFixture(linked=false)))
+            val overview=CreditAccountClient(server.url("/").toString().trimEnd('/')).overview(CreditAccount(token="fixture-session",id="alice"))
+            assertEquals(1,server.requestCount);assertEquals("",overview.primaryCreditWallet)
+            assertFalse(overview.allowsPurchasedCredits(CreditAccount(id="alice")))
+        }
+    }
+    @Test fun automaticCreditRequestsPreserveTheFreeOnlyChoiceAndNeverPinWalletlessFunding() = runBlocking {
+        val bodies=mutableListOf<JSONObject>()
+        val http=OkHttpClient.Builder().addInterceptor { chain ->
+            val buffer=okio.Buffer();chain.request().body!!.writeTo(buffer);bodies+=JSONObject(buffer.readUtf8())
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK").header("Content-Type","text/event-stream")
+                .body("data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n".toResponseBody("text/event-stream".toMediaType())).build()
+        }.build()
+        for(freeOnly in listOf(true,false)) {
+            val account=CreditAccount(token="fixture-session",id="alice",freeOnly=freeOnly)
+            InferenceClient(http).stream(account.inference(),listOf(InferenceMessage("user","Hello"))) {}
+        }
+        assertEquals(2,bodies.size)
+        bodies.forEachIndexed { index,body ->
+            assertFalse(body.has("creditWallet"));assertEquals(index==0,body.getBoolean("freeOnly"))
+            assertEquals(DEFAULT_CREDIT_MODEL,body.getString("model"))
+        }
+    }
     @Test fun gptOssIsTheDefaultWithoutReplacingSavedChoices() {
         assertEquals(DEFAULT_CREDIT_MODEL,CreditAccount().model)
         assertEquals(DEFAULT_CREDIT_MODEL,CreditAccount.read(JSONObject().put("model","")).model)

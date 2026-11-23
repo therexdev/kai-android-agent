@@ -45,15 +45,30 @@ class CreditAccountClient(private val origin: String=CREDIT_ORIGIN, private val 
     }
     suspend fun logout(token: String) { request("/auth/logout",token,JSONObject()) }
     suspend fun overview(a: CreditAccount): AccountOverview {
-        val url=(origin+"/platform/api/overview").toHttpUrl().newBuilder().addQueryParameter("wallet",a.wallet).build()
+        val initial=loadOverview(a,a.wallet)
+        if(a.wallet.isNotBlank())return initial
+        // Automatic chat funding stays automatic. Show the primary connected
+        // account's balance rather than the unrelated walletless zero balance.
+        val displayWallet=initial.primaryCreditWallet.ifBlank { initial.wallets.firstOrNull().orEmpty() }
+        return if(displayWallet.isBlank() || initial.selectedWallet==displayWallet) initial else loadOverview(a,displayWallet)
+    }
+    private suspend fun loadOverview(a: CreditAccount, wallet: String): AccountOverview {
+        val url=(origin+"/platform/api/overview").toHttpUrl().newBuilder().apply {
+            if(wallet.isNotBlank())addQueryParameter("wallet",wallet)
+        }.build()
         val o=request(url.toString().removePrefix(origin),a.token)
         val account=o.getJSONObject("account");require(account.getString("id")==a.id) { "Account identity changed. Sign in again." }
         val wallets=account.getJSONArray("wallets");val models=o.getJSONArray("models");val credits=o.getJSONObject("credits")
-        return AccountOverview(a.id,account.optString("email"),(0 until wallets.length()).map { wallets.getJSONObject(it).getString("address") },
+        val addresses=(0 until wallets.length()).map { wallets.getJSONObject(it).getString("address") }.distinct()
+        val labels=(0 until wallets.length()).associate { i -> val w=wallets.getJSONObject(i)
+            w.getString("address") to w.optString("label").takeUnless { it=="null" }.orEmpty() }
+        val primary=account.optString("primaryCreditWallet").takeIf { it in addresses }.orEmpty()
+        return AccountOverview(a.id,account.optString("email"),addresses,
             o.optString("selectedWallet").takeUnless { it=="null" }.orEmpty(),credits.getJSONObject("free").getString("available"),
             credits.getJSONObject("purchased").getString("available"),credits.getJSONObject("free").optString("state"),
             (0 until models.length()).map { i -> val m=models.getJSONObject(i);CreditModel(m.getString("model"),m.optString("label",m.getString("model")),
                 m.optBoolean("available"),m.optBoolean("freeEligible"),m.getInt("maxOutput").coerceIn(1,131072),
-                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion")) },o.optJSONObject("features")?.optInt("koinVault")==1)
+                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion")) },
+            o.optJSONObject("features")?.optInt("koinVault")==1,primary,labels)
     }
 }

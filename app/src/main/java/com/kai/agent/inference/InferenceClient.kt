@@ -197,7 +197,12 @@ class InferenceClient(client: OkHttpClient? = null,
             })
         val tokenKey = if (config.provider == ProviderId.OPENAI) "max_completion_tokens" else "max_tokens"
         body.put(tokenKey, prepared.outputTokens)
-        if(config.accountSession) body.put("creditWallet", config.creditWallet.ifBlank { null }).put("freeOnly", config.freeOnly).put("stream_options",JSONObject().put("include_usage",true))
+        if(config.accountSession) {
+            // Omitted means automatic connected-account selection. Explicit
+            // null pins the walletless account and cannot use linked funds.
+            if(config.creditWallet.isNotBlank())body.put("creditWallet",config.creditWallet)
+            body.put("freeOnly",config.freeOnly).put("stream_options",JSONObject().put("include_usage",true))
+        }
         if (context?.automatic == true) body.put("context_tokens", InferenceBudget.estimate(prepared.messages) + prepared.outputTokens + 512)
         currentCoroutineContext()[TraceContext]?.trace?.record("model_request",JSONObject().put("requestId",requestId)
             .put("model",config.modelId).put("stream",true).put("generation",JSONObject().put(tokenKey,prepared.outputTokens)
@@ -412,7 +417,7 @@ class InferenceClient(client: OkHttpClient? = null,
         if(config?.accountSession == true) {
             val accountMessage = when(response.code) {
                 401 -> "Your sign-in expired. Open Account and sign in again."
-                402 -> "This request needs available credits. Open Account to check your balance, selected wallet and free-only setting."
+                402 -> "This request needs available credits. Open Account, choose a connected credit account and enable Use purchased credits, or add credits."
                 403 -> "Your account or selected wallet is not authorized for this request. Open Account and refresh your access."
                 404 -> "This model is no longer available. Open Account and choose an available model."
                 429 -> "The account service is limiting requests or credits. Wait a moment, then check your balance in Account."
@@ -423,7 +428,7 @@ class InferenceClient(client: OkHttpClient? = null,
             if(response.code == 400) {
                 val detail=runCatching { response.peekBody(16_384).string() }.getOrDefault("")
                 if(Regex("insufficient.{0,40}credit|not enough.{0,40}credit|free.only|free credits only|purchased credits",RegexOption.IGNORE_CASE).containsMatchIn(detail))
-                    return InferenceException("Check your available credits, selected wallet and free-only setting in Account, then try again.",400)
+                    return InferenceException("Open Account to check your connected credit account and Use purchased credits setting, then try again.",400)
             }
         }
         if(response.code !in setOf(400,404,413,422,500,502,503)) return statusError(response.code)
