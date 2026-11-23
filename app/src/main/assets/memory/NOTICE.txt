@@ -1,0 +1,34 @@
+KAI offline semantic memory model
+
+Model: sentence-transformers/all-MiniLM-L6-v2
+Publisher: Sentence Transformers contributors
+Model source revision: 5641a7880f40ebf4035d05e60c5f9b7a9c272c84
+Model and tokenizer license: Apache License 2.0
+https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+
+This distribution includes the publisher's unmodified ONNX model_qint8_arm64.onnx,
+renamed minilm-l6-v2-qint8.onnx, plus its unmodified vocab.txt, tokenizer_config.json,
+and model card. The model was quantized by the publisher. KAI does not modify the
+learned weights. See MODEL_CARD.md, model_manifest.json and LICENSE-APACHE-2.0.txt.
+
+Runtime: Microsoft ONNX Runtime Android 1.27.0
+Copyright (c) Microsoft Corporation. All rights reserved.
+Runtime license: MIT (LICENSE-ONNX-RUNTIME-MIT.txt)
+https://github.com/microsoft/onnxruntime
+
+KAI supplies its own Kotlin BERT-uncased WordPiece implementation, mean pooling,
+L2 normalization, integrity checks, and phone-local indexing integration. Tokenizer
+reference fixtures are checked against the publisher's pinned tokenizer.json.
+
+Limits: English sentence/short-paragraph model, up to 256 WordPieces including
+special boundary tokens. Longer text is truncated for this embedding only; the
+original stored fact remains intact. Semantic similarity is a retrieval signal,
+not a test of factual equivalence, truth, identity, permission, or contradiction.
+Model weights, tokenization and inference are bundled and work without downloads,
+model API credentials or network access. The model is not a chat/agent model.
+
+Every persisted vector must be derived from a current fact revision and exact
+source-text hash. Corrections, forgotten facts, revoked source access and changed
+dependencies invalidate the vector. Scope/permission checks precede retrieval;
+the vector never authorizes access to its source. Changing the model ID requires
+rebuilding vectors. Do not compare vectors produced by different model versions.

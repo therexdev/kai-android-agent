@@ -1,0 +1,15 @@
+{
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "publisher_revision": "5641a7880f40ebf4035d05e60c5f9b7a9c272c84",
+  "model_source": "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/5641a7880f40ebf4035d05e60c5f9b7a9c272c84/onnx/model_qint8_arm64.onnx",
+  "model_sha256": "4278337fd0ff3c68bfb6291042cad8ab363e1d9fbc43dcb499fe91c871902474",
+  "vocabulary_sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+  "license": "Apache-2.0",
+  "dimensions": 384,
+  "max_wordpieces_including_boundaries": 256,
+  "pooling": "attention-mask mean followed by L2 normalization",
+  "tokenizer": "BERT uncased WordPiece; tokenizer implementation v1",
+  "android_runtime": "com.microsoft.onnxruntime:onnxruntime-android:1.27.0",
+  "runtime_license": "MIT",
+  "network_during_inference": false
+}

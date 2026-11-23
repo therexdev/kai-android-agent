@@ -1,0 +1,19 @@
+KAI Android offline test voices
+
+KittenTTS Nano v0.8: KittenML, Apache License 2.0. See kitten/LICENSE.
+https://github.com/KittenML/KittenTTS
+
+Kokoro v1.0: hexgrad/Kokoro-82M, Apache License 2.0. See kokoro/LICENSE.
+https://huggingface.co/hexgrad/Kokoro-82M
+
+Converted packages: k2-fsa/sherpa-onnx. Exact sources and hashes: catalog.json.
+https://github.com/k2-fsa/sherpa-onnx/tree/master/scripts/kitten-tts
+https://github.com/k2-fsa/sherpa-onnx/tree/master/scripts/kokoro
+
+The shared espeak-ng-data is unchanged from the model packages.
+eSpeak NG: GPL version 3 or later. See ESPEAK-COPYING.txt.
+Upstream corresponding source and build instructions:
+https://github.com/espeak-ng/espeak-ng
+
+Model speaker identities are unchanged. No voice cloning or pitch effects
+are applied to KittenTTS or Kokoro in this build.

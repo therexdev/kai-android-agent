@@ -1,0 +1,783 @@
+[
+  {
+    "slug": "GOOGLEDOCS_COPY_DOCUMENT",
+    "name": "Copy Google Document",
+    "description": "Tool to create a copy of an existing Google Document. Use this to duplicate a document, for example, when using an existing document as a template. The copied document will have a default title (e.g., 'Copy of [original title]') if no new title is provided, and will be placed in the user's root Google Drive folder.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CopyDocumentRequest",
+      "required": [
+        "document_id"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "title": "Title",
+          "examples": [
+            "My New Document Title"
+          ],
+          "description": "The title for the new copied document. If not provided, the title will be 'Copy of [original document's title]'.",
+          "human_parameter_name": "New Document Title",
+          "human_parameter_description": "The name you want to give to the new document copy. If you don't provide one, it will be automatically labeled as 'Copy of [original document's title]'."
+        },
+        "document_id": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "1a2b3c-example-document-id"
+          ],
+          "description": "The ID of the Google Document to be copied.",
+          "human_parameter_name": "Document ID",
+          "human_parameter_description": "The unique identifier for the Google Document you wish to copy. This is essential for locating the document in your Google Drive."
+        },
+        "include_shared_drives": {
+          "type": "boolean",
+          "title": "Include Shared Drives",
+          "default": true,
+          "description": "Whether to support copying documents from shared drives. Defaults to True.",
+          "human_parameter_name": "Include shared drives",
+          "human_parameter_description": "Enable copying documents from shared drives (team drives) you have access to."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_AND_POPULATE_TABLE",
+    "name": "Create and Populate Table in Google Doc",
+    "description": "Creates a table in a Google Document and attempts to populate its cells with the provided text. Table creation and cell population are separate steps, so a failure after creation can leave the table in the document.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateAndPopulateTableRequest",
+      "required": [
+        "documentId",
+        "rows",
+        "columns",
+        "cellData"
+      ],
+      "properties": {
+        "rows": {
+          "type": "integer",
+          "title": "Rows",
+          "maximum": 20,
+          "minimum": 1,
+          "examples": [
+            3
+          ],
+          "description": "The number of rows in the table. Must be between 1 and 20."
+        },
+        "index": {
+          "type": "integer",
+          "title": "Index",
+          "description": "The zero-based index where the table will be inserted, in UTF-16 code units. The index must be strictly less than the segment's end index. To insert at the end of a segment, omit this parameter and set 'insertAtEndOfSegment' to true instead."
+        },
+        "tabId": {
+          "type": "string",
+          "title": "Tab Id",
+          "description": "The tab that the location is in. When omitted, the request is applied to the first tab."
+        },
+        "columns": {
+          "type": "integer",
+          "title": "Columns",
+          "maximum": 20,
+          "minimum": 1,
+          "examples": [
+            4
+          ],
+          "description": "The number of columns in the table. Must be between 1 and 20."
+        },
+        "cellData": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": "Cell Data",
+          "examples": [
+            [
+              [
+                "Header 1",
+                "Header 2"
+              ],
+              [
+                "Data 1",
+                "Data 2"
+              ]
+            ]
+          ],
+          "description": "A 2D array (list of lists) containing the text content for each cell. The outer list represents rows, and each inner list represents columns. Must match the dimensions specified by 'rows' and 'columns'. Empty strings are allowed for empty cells."
+        },
+        "segmentId": {
+          "type": "string",
+          "title": "Segment Id",
+          "description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body."
+        },
+        "documentId": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "195j9eDD34F5f92m1_r4T3Y0N4WX_gXYs-y6uDxBYFpc"
+          ],
+          "description": "The ID of the document to update."
+        },
+        "insertAtEndOfSegment": {
+          "type": "boolean",
+          "title": "Insert At End Of Segment",
+          "description": "If true, inserts the table at the end of the segment (document body, header, or footer specified by segment_id). If false or omitted, and 'index' is not provided, it defaults to inserting at the end of the document body."
+        }
+      },
+      "description": "Request to create a table and populate it with cell data."
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_DOCUMENT",
+    "name": "Create a document",
+    "description": "Creates a new Google Docs document using the provided title as filename and inserts the initial text at the beginning if non-empty, returning the document's ID and metadata (excluding body content).",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateDocumentRequest",
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "title": "Text",
+          "examples": [
+            "This document outlines the key findings...",
+            "## Agenda\n1. Welcome\n2. Presentation\n3. Q&A",
+            "Start of the report."
+          ],
+          "description": "Optional initial text content to insert at the beginning of the new document. If not provided, an empty document will be created. For very large text (over 50,000 characters), the text will be inserted in chunks to avoid API limits.",
+          "human_parameter_name": "Initial Text Content",
+          "human_parameter_description": "The text you want to add to the start of your new document. This helps set the tone or context for what follows. Leave empty to create a blank document."
+        },
+        "title": {
+          "type": "string",
+          "title": "Title",
+          "examples": [
+            "Quarterly Business Review",
+            "Project Alpha - Brainstorming Notes",
+            "My Vacation Itinerary"
+          ],
+          "description": "Title for the new document, used as its filename in Google Drive.",
+          "human_parameter_name": "Document Title",
+          "human_parameter_description": "The title you want for your new document. This will be the name it shows up with in Google Drive."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_DOCUMENT_MARKDOWN",
+    "name": "Create Document Markdown",
+    "description": "Creates a new Google Docs document, optionally initializing it with a title and content provided as Markdown text.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateDocumentMarkdownRequest",
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "title": "Title",
+          "examples": [
+            "Meeting Notes Q3",
+            "Project Alpha Proposal",
+            "My New Story Draft"
+          ],
+          "description": "The title for the new Google Docs document.",
+          "human_parameter_name": "Document Title",
+          "human_parameter_description": "The title of the document you want to create. Please provide a meaningful title to help identify the document later."
+        },
+        "image_assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "title": "MarkdownImageAsset",
+            "required": [
+              "name",
+              "file"
+            ],
+            "properties": {
+              "file": {
+                "type": "object",
+                "title": "FileUploadable",
+                "required": [
+                  "name",
+                  "mimetype",
+                  "s3key"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "title": "Name",
+                    "examples": [
+                      "document.pdf",
+                      "image.jpg",
+                      "report.docx"
+                    ],
+                    "description": "The filename that will be used when uploading the file to the destination service"
+                  },
+                  "s3key": {
+                    "type": "string",
+                    "title": "S3Key",
+                    "examples": [
+                      "47563/gmail/GET_ATTACHMENT/response/12345"
+                    ],
+                    "description": "The S3 key of a publicly accessible file, typically returned from a previous download action that stored the file in S3. This key references an existing file that can be uploaded to another service."
+                  },
+                  "mimetype": {
+                    "type": "string",
+                    "title": "Mimetype",
+                    "examples": [
+                      "application/pdf",
+                      "image/jpeg",
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    ],
+                    "description": "The MIME type of the file"
+                  }
+                },
+                "description": "Uploaded image file. The action converts it into a temporary public URL that Google Docs can fetch.",
+                "file_uploadable": true,
+                "additionalProperties": false
+              },
+              "name": {
+                "type": "string",
+                "title": "Name",
+                "examples": [
+                  "diagram",
+                  "diagram.png"
+                ],
+                "description": "Name used to reference the uploaded image from Markdown, for example attachment://diagram or ./diagram.png."
+              }
+            }
+          },
+          "title": "Image Assets",
+          "description": "Optional uploaded images that Markdown can reference by name. Use Markdown image syntax like ![Alt](attachment://diagram). Public HTTPS image URLs in markdown do not need image_assets."
+        },
+        "markdown_text": {
+          "type": "string",
+          "title": "Markdown Text",
+          "default": "",
+          "description": "The initial content for the document, formatted as Markdown. Also accepts 'content' as an alias. Supports headings, real Google Docs lists including nested lists, multiple Markdown tables, task-list markers, images via publicly accessible URLs or matching image_assets uploads (max 2KB URL length after resolution; formats: JPEG, PNG, GIF; SVG not supported), blockquotes, code blocks, hyperlinks (e.g., [text](url)), and text formatting (bold, italic, etc.). If empty or omitted, creates document with title only.",
+          "human_parameter_name": "Markdown Text",
+          "human_parameter_description": "Enter the content you want in the document, formatted in Markdown. Supports headings, real nested lists, multiple tables, task-list markers, public URL images or matching uploaded image assets, blockquotes, code blocks, hyperlinks [text](url), and text formatting. Optional - leave empty to create a document with just the title."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_FOOTER",
+    "name": "Create Footer",
+    "description": "Creates a footer in a Google document for the specified type and optional section. If the API reports that a footer already exists, the tool may return the document's existing default footer ID instead.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateFooterRequest",
+      "required": [
+        "document_id",
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "DEFAULT"
+          ],
+          "type": "string",
+          "title": "Type",
+          "examples": [
+            "DEFAULT"
+          ],
+          "description": "The type of footer to create.",
+          "human_parameter_name": "Footer Type",
+          "human_parameter_description": "Specify the type of footer you want to create. Choose from various footer styles to best fit your document."
+        },
+        "document_id": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "12345abcdef"
+          ],
+          "description": "The ID of the document to create the footer in.",
+          "human_parameter_name": "Document ID",
+          "human_parameter_description": "The unique identifier of the document where you want to add a footer. This ID helps us know which document to work with."
+        },
+        "section_break_location": {
+          "type": "object",
+          "title": "Location",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "title": "Index",
+              "description": "The zero-based index, in UTF-16 code units, relative to the beginning of the segment."
+            },
+            "tabId": {
+              "type": "string",
+              "title": "Tab Id",
+              "description": "The tab that the location is in. When omitted, the request is applied to the first tab."
+            },
+            "segmentId": {
+              "type": "string",
+              "title": "Segment Id",
+              "description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body."
+            }
+          },
+          "description": "The location of the SectionBreak immediately preceding the section whose SectionStyle this footer should belong to. If this is unset or refers to the first section break in the document, the footer applies to the document style.",
+          "additionalProperties": false,
+          "human_parameter_name": "Section Break Location",
+          "human_parameter_description": "Indicate where in the document this footer should apply. This helps to associate the footer with a specific section."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_FOOTNOTE",
+    "name": "Create Footnote",
+    "description": "Tool to create a new footnote in a Google Document. Use this when you need to add a footnote at a specific location or at the end of the document body.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateFootnoteRequestModel",
+      "required": [
+        "documentId"
+      ],
+      "properties": {
+        "location": {
+          "type": "object",
+          "title": "Location",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "title": "Index",
+              "examples": [
+                100
+              ],
+              "description": "The zero-based index, in UTF-16 code units. The index is relative to the beginning of the segment specified by segment_id.",
+              "human_parameter_name": "Index",
+              "human_parameter_description": "The position in the document where you want to add the footnote. This is based on the text count."
+            },
+            "tabId": {
+              "type": "string",
+              "title": "Tab Id",
+              "examples": [
+                "t.1a2b3c4d5e6f7g8h9i0j"
+              ],
+              "description": "The tab that the location is in. When omitted, the request is applied to the first tab.",
+              "human_parameter_name": "Tab Id",
+              "human_parameter_description": "Indicates which tab the footnote is associated with. If not specified, it defaults to the first tab."
+            },
+            "segmentId": {
+              "type": "string",
+              "title": "Segment Id",
+              "examples": [
+                "h.1a2b3c4d5e6f7g8h9i0j"
+              ],
+              "description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body.",
+              "human_parameter_name": "Segment Id",
+              "human_parameter_description": "The identifier of the section where the footnote will be placed. If left empty, it means you're working in the main body of the document."
+            }
+          },
+          "description": "Inserts the footnote reference at a specific index in the document. The segmentId within this Location object must be empty as footnotes can only be inserted in the document body.",
+          "additionalProperties": false,
+          "human_parameter_name": "Location",
+          "human_parameter_description": "Defines the exact spot in the document for the footnote reference. Keep in mind that it can only be placed in the main body."
+        },
+        "documentId": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "1a2b3c4d5e6f7g8h9i0j"
+          ],
+          "description": "The ID of the document to create the footnote in.",
+          "human_parameter_name": "Document Id",
+          "human_parameter_description": "The unique identifier for the document where you want to insert the footnote."
+        },
+        "endOfSegmentLocation": {
+          "type": "object",
+          "title": "EndOfSegmentLocation",
+          "properties": {
+            "tabId": {
+              "type": "string",
+              "title": "Tab Id",
+              "examples": [
+                "t.1a2b3c4d5e6f7g8h9i0j"
+              ],
+              "description": "The tab that the location is in. When omitted, the request is applied to the first tab.",
+              "human_parameter_name": "Tab Id",
+              "human_parameter_description": "Specifies the tab for placing the footnote. If not provided, it will default to the first tab."
+            },
+            "segmentId": {
+              "type": "string",
+              "title": "Segment Id",
+              "examples": [
+                "h.1a2b3c4d5e6f7g8h9i0j"
+              ],
+              "description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body.",
+              "human_parameter_name": "Segment Id",
+              "human_parameter_description": "The identifier for the section where the footnote is to be added. Leaving it empty means you're focusing on the document body."
+            }
+          },
+          "description": "Inserts the footnote reference at the end of the document body. The segmentId within this EndOfSegmentLocation object must be empty.",
+          "additionalProperties": false,
+          "human_parameter_name": "End Of Segment Location",
+          "human_parameter_description": "Indicates that you want to add the footnote reference at the end of the document. The segment ID should be blank."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_HEADER",
+    "name": "Create Header",
+    "description": "Creates a header in a Google Document, optionally for a specified section, and can add text. For a document-level default header, it may reuse an existing header; text insertion is attempted separately and its success is reported.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateHeaderRequest",
+      "required": [
+        "documentId"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "title": "Text",
+          "examples": [
+            "My Document Header",
+            "Company Name - Confidential"
+          ],
+          "description": "Optional text content to add to the header after creation. If provided, the text will be inserted into the header at index 0.",
+          "human_parameter_name": "Header Text",
+          "human_parameter_description": "The text content to add to the header. If not provided, an empty header will be created."
+        },
+        "type": {
+          "enum": [
+            "HEADER_FOOTER_TYPE_UNSPECIFIED",
+            "DEFAULT"
+          ],
+          "type": "string",
+          "title": "Type",
+          "default": "DEFAULT",
+          "description": "The type of header to create. Use 'DEFAULT' for the standard document header. Only one DEFAULT header can exist per document; if one already exists, the existing header ID will be returned.",
+          "human_parameter_name": "Type",
+          "human_parameter_description": "The type of header to create. Use 'DEFAULT' for a standard header."
+        },
+        "documentId": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "12345abcdef"
+          ],
+          "description": "The ID of the document to create the header in.",
+          "human_parameter_name": "Document ID",
+          "human_parameter_description": "Provide the unique identifier of the document where you want to add a header."
+        },
+        "sectionBreakLocation": {
+          "type": "object",
+          "title": "Location",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "title": "Index",
+              "description": "The zero-based index, in UTF-16 code units.",
+              "human_parameter_name": "Index",
+              "human_parameter_description": "The zero-based index, in UTF-16 code units."
+            },
+            "tabId": {
+              "type": "string",
+              "title": "Tab Id",
+              "description": "The tab that the location is in. When omitted, the request is applied to the first tab.",
+              "human_parameter_name": "Tab Id",
+              "human_parameter_description": "The tab that the location is in. When omitted, the request is applied to the first tab."
+            },
+            "segmentId": {
+              "type": "string",
+              "title": "Segment Id",
+              "description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body.",
+              "human_parameter_name": "Segment Id",
+              "human_parameter_description": "The ID of the header, footer or footnote the location is in. An empty segment ID signifies the document's body."
+            }
+          },
+          "description": "The location of the SectionBreak which begins the section this header should belong to. Only needed for section-specific headers.",
+          "additionalProperties": false,
+          "human_parameter_name": "Section Break Location",
+          "human_parameter_description": "The location of the SectionBreak for section-specific headers."
+        }
+      },
+      "description": "Request to create a header in a Google Document, optionally with text content.\n\nAccepts flat parameters directly:\n- document_id: The ID of the document\n- type: The header type (DEFAULT or HEADER_FOOTER_TYPE_UNSPECIFIED)\n- text: Optional text content to add to the header after creation\n- section_break_location: Optional location for section-specific headers"
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_NAMED_RANGE",
+    "name": "Create Named Range",
+    "description": "Tool to create a new named range in a Google Document. Use this to assign a name to a specific part of the document for easier reference or programmatic manipulation.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateNamedRangeRequest",
+      "required": [
+        "documentId",
+        "name",
+        "rangeStartIndex",
+        "rangeEndIndex"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "examples": [
+            "Chapter1Intro",
+            "ImportantSection"
+          ],
+          "maxLength": 256,
+          "minLength": 1,
+          "description": "The name for the new named range. Must be 1-256 characters.",
+          "human_parameter_name": "Named Range Name",
+          "human_parameter_description": "Choose a meaningful name for the new named range. This name will help you easily refer to this specific section in the document later."
+        },
+        "tabId": {
+          "type": "string",
+          "title": "Tab Id",
+          "examples": [
+            "t.abc123"
+          ],
+          "description": "Optional. The ID of the document tab containing this range. When omitted, Google Docs applies the request to the first tab."
+        },
+        "documentId": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789_AbCdEf"
+          ],
+          "description": "The ID of the document where the named range will be created.",
+          "human_parameter_name": "Document ID",
+          "human_parameter_description": "Provide the ID of the document where you want to create the named range. This helps identify the specific document you're working with."
+        },
+        "rangeEndIndex": {
+          "type": "integer",
+          "title": "Range End Index",
+          "minimum": 0,
+          "examples": [
+            200
+          ],
+          "description": "The zero-based end index of the range.",
+          "human_parameter_name": "Range End Index",
+          "human_parameter_description": "Indicate where the range should end. This index marks the endpoint for the content you want to include in the named range."
+        },
+        "rangeSegmentId": {
+          "type": "string",
+          "title": "Range Segment Id",
+          "examples": [
+            "h.1a2b3c4d5e6f",
+            ""
+          ],
+          "description": "Optional. The ID of the header, footer, or footnote. Empty for document body.",
+          "human_parameter_name": "Range Segment ID",
+          "human_parameter_description": "If needed, provide the ID of a specific segment like a header, footer, or footnote. If you're working with the main body of the document, you can leave this blank."
+        },
+        "rangeStartIndex": {
+          "type": "integer",
+          "title": "Range Start Index",
+          "minimum": 0,
+          "examples": [
+            100
+          ],
+          "description": "The zero-based start index of the range.",
+          "human_parameter_name": "Range Start Index",
+          "human_parameter_description": "Specify the starting point of the range in the document. This index tells the system where to begin including content in the named range."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_PARAGRAPH_BULLETS",
+    "name": "Create Paragraph Bullets",
+    "description": "Tool to add bullets to paragraphs within a specified range in a Google Document. Use when you need to format a list or a set of paragraphs as bullet points.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateParagraphBulletsRequestModel",
+      "required": [
+        "document_id",
+        "createParagraphBullets"
+      ],
+      "properties": {
+        "tabId": {
+          "type": "string",
+          "title": "Tab Id",
+          "examples": [
+            "t.abc123"
+          ],
+          "description": "Optional tab ID to apply to createParagraphBullets.range.tabId. When omitted, Google Docs applies the request to the first tab."
+        },
+        "document_id": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "12345abcdef"
+          ],
+          "description": "The ID of the document to update.",
+          "human_parameter_name": "Document Id",
+          "human_parameter_description": "Please provide the document ID where you want to add bullet points."
+        },
+        "createParagraphBullets": {
+          "type": "object",
+          "title": "Create Paragraph Bullets",
+          "required": [
+            "range",
+            "bulletPreset"
+          ],
+          "properties": {
+            "range": {
+              "type": "object",
+              "title": "Range",
+              "required": [
+                "startIndex",
+                "endIndex"
+              ],
+              "properties": {
+                "tabId": {
+                  "type": "string",
+                  "title": "Tab Id",
+                  "examples": [
+                    "t.abc123"
+                  ],
+                  "description": "The ID of the tab that contains this range. When omitted, Google Docs applies the request to the first tab."
+                },
+                "endIndex": {
+                  "type": "integer",
+                  "title": "End Index",
+                  "examples": [
+                    200
+                  ],
+                  "description": "The zero-based end index of the range, exclusive.",
+                  "human_parameter_name": "Endindex",
+                  "human_parameter_description": "Specify the endpoint of the range in the document, where the bullet formatting will stop."
+                },
+                "segmentId": {
+                  "type": "string",
+                  "title": "Segment Id",
+                  "examples": [
+                    "header_id"
+                  ],
+                  "description": "The ID of the header, footer, or footnote that this range is contained in. An empty segment ID signifies the document's body.",
+                  "human_parameter_name": "Segmentid",
+                  "human_parameter_description": "If applicable, provide the ID of a specific section, like a header or footer, where the bullets should be applied."
+                },
+                "startIndex": {
+                  "type": "integer",
+                  "title": "Start Index",
+                  "examples": [
+                    100
+                  ],
+                  "description": "The zero-based start index of the range, inclusive.",
+                  "human_parameter_name": "Startindex",
+                  "human_parameter_description": "Provide the starting point of the range in the document where you want to apply the bullet formatting."
+                }
+              },
+              "description": "The range to apply the bullet preset to.",
+              "additionalProperties": false,
+              "human_parameter_name": "Range",
+              "human_parameter_description": "The range to apply the bullet preset to."
+            },
+            "bulletPreset": {
+              "enum": [
+                "BULLET_GLYPH_PRESET_UNSPECIFIED",
+                "BULLET_DISC_CIRCLE_SQUARE",
+                "BULLET_DIAMONDX_ARROW3D_SQUARE",
+                "BULLET_CHECKBOX",
+                "BULLET_ARROW_DIAMOND_DISC",
+                "BULLET_STAR_CIRCLE_SQUARE",
+                "BULLET_ARROW3D_CIRCLE_SQUARE",
+                "BULLET_LEFTTRIANGLE_DIAMOND_DISC",
+                "BULLET_DIAMONDX_HOLLOWDIAMOND_SQUARE",
+                "BULLET_DIAMOND_CIRCLE_SQUARE",
+                "NUMBERED_DECIMAL_ALPHA_ROMAN",
+                "NUMBERED_DECIMAL_ALPHA_ROMAN_PARENS",
+                "NUMBERED_DECIMAL_NESTED",
+                "NUMBERED_UPPERALPHA_ALPHA_ROMAN",
+                "NUMBERED_UPPERROMAN_UPPERALPHA_DECIMAL",
+                "NUMBERED_ZERODECIMAL_ALPHA_ROMAN"
+              ],
+              "type": "string",
+              "title": "Bullet Preset",
+              "examples": [
+                "BULLET_DISC_CIRCLE_SQUARE"
+              ],
+              "description": "The kinds of bullet glyphs to be used.",
+              "human_parameter_name": "Bulletpreset",
+              "human_parameter_description": "Choose the style of bullet points you want to use for the paragraphs."
+            }
+          },
+          "description": "The request body for creating paragraph bullets in the document.",
+          "additionalProperties": false,
+          "human_parameter_name": "Create Paragraph Bullets",
+          "human_parameter_description": "The create paragraph bullets value."
+        }
+      }
+    }
+  },
+  {
+    "slug": "GOOGLEDOCS_CREATE_TAB",
+    "name": "Create Document Tab",
+    "description": "Creates a new tab in a Google Docs document. Tabs allow you to organize document content into separate sections within a single document. Use this action when you need to add a new organizational tab to a document. When a tab is added at a specified index, all subsequent tabs' indexes are automatically incremented.",
+    "input_parameters": {
+      "type": "object",
+      "title": "CreateTabRequest",
+      "required": [
+        "document_id"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "title": "Document Id",
+          "examples": [
+            "1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"
+          ],
+          "description": "The unique identifier of the Google Docs document where the tab will be created. This ID can be found in the document's URL."
+        },
+        "tab_properties": {
+          "type": "object",
+          "title": "TabProperties",
+          "examples": [
+            {
+              "index": 0,
+              "title": "New Tab"
+            },
+            {
+              "title": "Child Tab",
+              "parentTabId": "t.abc123"
+            }
+          ],
+          "properties": {
+            "index": {
+              "type": "integer",
+              "title": "Index",
+              "examples": [
+                0,
+                1,
+                2
+              ],
+              "description": "The zero-based position where the tab should be inserted within its parent tab group. If not specified, the tab is added at the end. When a tab is added at a given index, all subsequent tabs' indexes are incremented."
+            },
+            "title": {
+              "type": "string",
+              "title": "Title",
+              "examples": [
+                "Project Overview",
+                "Budget Details"
+              ],
+              "description": "The user-visible title/name of the tab. If not specified, Google Docs will generate a default title."
+            },
+            "parentTabId": {
+              "type": "string",
+              "title": "Parent Tab Id",
+              "examples": [
+                "t.abc123def456"
+              ],
+              "description": "The ID of the parent tab under which this tab should be created. Leave empty or omit to create a root-level tab. Must be a valid tab ID from the document."
+            }
+          },
+          "description": "Properties of a tab to be created.",
+          "additionalProperties": false
+        }
+      },
+      "description": "Request model for creating a new tab in a Google Document."
+    }
+  }
+]

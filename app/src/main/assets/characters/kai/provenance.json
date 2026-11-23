@@ -1,0 +1,81 @@
+{
+  "name": "KAI desktop companion",
+  "sourceRepository": "https://github.com/therexdev/kai-plugin-assistant",
+  "sourceCommit": "575940a2d6405ff6a933cc5dec8c824875b11824",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 therexdev",
+  "sourcePaths": [
+    "plugin/service/ui/kai-robot.svg",
+    "plugin/service/ui/kai-character.css",
+    "plugin/kai-character.svg"
+  ],
+  "mobileChanges": [
+    "Original desktop texture and vector face retained. Android SVG uses one uncut fallback image and editable vector face; connected GPU skin supplies articulated body pixels. Original desktop vector cape stays behind the skin. Original cutout contours are used only to exclude cape pixels from the body texture at runtime."
+  ],
+  "svgViewBox": "0 40 1024 1440",
+  "texturePixels": {
+    "width": 512,
+    "height": 768
+  },
+  "svgTextureSize": {
+    "width": 1024,
+    "height": 1536
+  },
+  "files": {
+    "kai.svg": {
+      "bytes": 47333,
+      "sha256": "48baeed4f45702cf82ea46a04f142af92e9d034d786825879d2b02acf58c777a"
+    },
+    "kai-texture.webp": {
+      "bytes": 95692,
+      "sha256": "2bf1ec7a69c42926537e24028a5e09fc1dfc25ae361038fc8ac9b836a3f85a94"
+    },
+    "kai.css": {
+      "bytes": 13367,
+      "sha256": "7e15b0910a609a45f7d5ecbd717e04fc25ee48a16c80a398d5d1069e4b303807"
+    },
+    "LICENSE": {
+      "bytes": 1066,
+      "sha256": "b24da3d523260cb8fef4e6d871cf38ebf4155449478ca5feb009b9822d6c7957"
+    },
+    "kai-poster.webp": {
+      "bytes": 67204,
+      "sha256": "748ba0fc365cd3300f1b8919d779e41de1d9a267adb7238beff742847ac1e050"
+    }
+  },
+  "silhouetteClip": "SVG contour derived from the saturated/dark robot silhouette with enclosed white metal regions preserved. Texture pixels unchanged. Original desktop articulation masks and CSS preserved.",
+  "poster": "Neutral SVG rig rendered with Inkscape and encoded as WebP with alpha preserved by ImageMagick.",
+  "rig": "Connected native Android Canvas bitmap mesh, using the original unchanged raster source and original face artwork. Continuous neck weights and placed shoulder, elbow and wrist bones produce eased greetings. NativeCharacterMotion and NativeCharacterView follow app state, audible speech, reduced motion and foreground visibility. The app does not execute the reference motion.js browser renderer.",
+  "animationVersion": "0.4.10-alpha",
+  "nativeDerivedAssets": {
+    "native/kai/attentive.webp": {
+      "bytes": 988,
+      "sha256": "68da81a677fe73e0a1959e6be0d9a29efb20503d40972445c96868a9f7f0115d"
+    },
+    "native/kai/brows.webp": {
+      "bytes": 818,
+      "sha256": "59a4659e45f59f375efaab782665bd56aa50bb9078899a7ccc6f1b79cb82e1d6"
+    },
+    "native/kai/cape.webp": {
+      "bytes": 27726,
+      "sha256": "fc5a96d716c870586ac20b7aa57eecd3b0e509f1b7eb75810a4c29270a0c0f06"
+    },
+    "native/kai/eyes.webp": {
+      "bytes": 2736,
+      "sha256": "030632796538369a26d1f09990505cf2aca333581deef265ab64472dc4888c9c"
+    },
+    "native/kai/mouth.webp": {
+      "bytes": 690,
+      "sha256": "8a69526715e5782730ee2ce4a6f506448d71731b699d6fa2dc3a05ce60da3798"
+    },
+    "native/kai/skin.webp": {
+      "bytes": 288570,
+      "sha256": "97ddc4c3085da60765fefda1f4f2842684646652697f5ce9520efda83dff4be6"
+    },
+    "native/kai/smile.webp": {
+      "bytes": 860,
+      "sha256": "71e05785865edcc6b6fb8056b14714c220a9b6d089c8eccaf556c83189af37a7"
+    }
+  },
+  "nativeManifestSha256": "fe940fba8b33d26e9d0de5fa25dd3dd89ca7cf1b2def7f2e33bf844b2a88d252"
+}

@@ -1,0 +1,12 @@
+# KAI Android development
+
+- This Android app owns its memory, agent loop, task state, UI and permissions. Koinos AI and OpenAI are inference providers only.
+- Memory facts, identities, evidence, jobs and deletion records commit together in SQLCipher. Use stable entity IDs and exact source evidence; names and embedding similarity never authorize identity merges. Keep vectors/FTS rebuildable and validate their current fact revision, scope and text before use. Memory confirmations never authorize external actions.
+- Keep finalized-turn extraction outside active voice/model work. Temporary chats cannot create persisted history, memory evidence or extraction jobs. Forget must invalidate old revisions, source reprocessing, indexes, stale jobs, imports and any obsolete local recovery snapshot.
+- Connections call Composio directly with an API key entered by the phone owner. KAI website sign-in controls inference and credits; Composio connections remain separately configured. No desktop plugin is required. Keep that key in encrypted phone storage; exclude it from exports, logs, prompts and screenshots. Never embed a shared publisher/project key in the APK or source. Preserve the exact Composio user ID when reusing existing accounts.
+- Preserve exact action approval bindings, service account ownership checks, durable intent-before-submit and UNKNOWN outcome semantics. Never automatically replay an ambiguous write.
+- Keep microphone use explicit and lifecycle-aware. Preserve user speech on interruption; do not claim unheard assistant output was heard.
+- Preserve unreadable encrypted data. Do not silently reset storage after a Keystore or parsing error.
+- Preserve the installed alpha signing identity for updates (certificate SHA-256 `a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89`). Its separate private continuity artifact is `KAI-Android-Alpha-PRIVATE-Signing-Backup.zip`; never put that key in source archives or public repositories.
+- Run relevant JVM tests, Android lint, assemble, and device tests for lifecycle/storage changes. Distinguish mock-service tests from live account verification and emulator audio from physical-phone validation.
+- Work in this independent Android project. Do not publish this work into the legacy kaiapp repository or change production services as an incidental build step.

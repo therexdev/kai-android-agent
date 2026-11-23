@@ -1,0 +1,64 @@
+{
+  "character": "Sage",
+  "concept": "woodland owl spirit",
+  "textureSource": "Generated with built-in OpenAI image_gen for the KAI Android project",
+  "textureGeneratedFile": "exec-10480a5c-b75b-4768-ac40-bb2f0c28aabb.png",
+  "generatedOn": "2026-11-16",
+  "prompt": "Use case: stylized-concept. Asset type: production character texture for an Android AI companion, front-facing full-body neutral animation pose, transparent background. Create SAGE, an adorable calm wise woodland owl spirit from the same premium 3D cartoon universe as a glossy chibi robot. Rounded oversized owl head with two soft small feather ear tufts, elegant muted sage-green plush feathers, huge smooth pale cream heart-shaped face disk, compact round body with layered feather scallops, short feather wings held slightly away from body, little amber talons, small polished gold leaf pendant on chest. Gentle, reassuring, sophisticated and cute, premium animated movie-quality 3D render with tactile velvety feathers, soft studio highlights. Exact composition: single character straight-on, symmetrical neutral standing pose, oversized head centered in upper 50% of portrait canvas, head/body seam at 52% height, torso 54\u201378%, feet at 80\u201394%. Wings should have transparent gaps from torso and clearly defined joints. All extremities fully in frame, 8% padding. Important face disk must be completely BLANK cream with NO eyes, eyebrows, beak, nose, or mouth, because the game engine overlays an expressive face and beak. No text, floor, cast shadow, background, extra characters, props, watermark, or checker pattern. No flat vector or low-poly. Actual transparent alpha cutout.",
+  "textureChanges": "None; the original RGBA PNG is copied byte-for-byte.",
+  "rig": "Connected native Android Canvas bitmap mesh, using the original unchanged raster source and original face artwork. Continuous neck weights and placed shoulder, elbow and wrist bones produce eased greetings. NativeCharacterMotion and NativeCharacterView follow app state, audible speech, reduced motion and foreground visibility. The app does not execute the reference motion.js browser renderer.",
+  "textureDimensions": [
+    1199,
+    1312
+  ],
+  "viewBox": [
+    -70,
+    -35,
+    1339,
+    1392
+  ],
+  "silhouetteClip": "SVG contour around the main alpha silhouette (alpha >64, 1px contour margin) excludes faint disconnected generator matte speckles; source raster remains byte-for-byte unchanged.",
+  "poster": "Neutral SVG rig rendered with Inkscape and encoded as WebP with alpha preserved by ImageMagick.",
+  "files": {
+    "sage.svg": {
+      "bytes": 11667,
+      "sha256": "f049b921a2529e73c57b88ad2691577d2ac1b59a001557896a76ba340fa7b0d1"
+    },
+    "sage-poster.webp": {
+      "bytes": 72552,
+      "sha256": "962566ddcf610803a0ad93b2cec082d669c01e9815463a729e4c0b8b182220ec"
+    },
+    "sage.css": {
+      "bytes": 4943,
+      "sha256": "75e7fa7b1062fcd446eecc9a697f262c32645e713cf8fb2d666f5cf251fc173e"
+    },
+    "sage-texture.png": {
+      "bytes": 1871841,
+      "sha256": "ee92afc685ced54c54ddaf628dfd89b977f14eadbcbaecc77aefbbc1473f0a07"
+    }
+  },
+  "animationVersion": "0.4.10-alpha",
+  "nativeDerivedAssets": {
+    "native/sage/brows.webp": {
+      "bytes": 1176,
+      "sha256": "2dce89e6a8faf0d3489ba65ac1d2f9311eb1d91cd45fe5b42407fb092833a073"
+    },
+    "native/sage/eyes.webp": {
+      "bytes": 7616,
+      "sha256": "a3d552e483cd643017339e377adb7c7a25cd989c84d865c185f1f1a5e2c8e813"
+    },
+    "native/sage/mouth.webp": {
+      "bytes": 2768,
+      "sha256": "c739d77d0e9bb2bd23696072aac3aa24cb5025a51139d875333f4f2ef877fc81"
+    },
+    "native/sage/skin.webp": {
+      "bytes": 1098510,
+      "sha256": "db0e11aab87049e389cd90bb2d3abae8fd4627ec104c63b0e685fcd8cfaeb61a"
+    },
+    "native/sage/smile.webp": {
+      "bytes": 2694,
+      "sha256": "9cae145ede7504b2ea630928bec7f49c8cb8ee97c2004df23c11e646b5cbfdbe"
+    }
+  },
+  "nativeManifestSha256": "fe940fba8b33d26e9d0de5fa25dd3dd89ca7cf1b2def7f2e33bf844b2a88d252"
+}

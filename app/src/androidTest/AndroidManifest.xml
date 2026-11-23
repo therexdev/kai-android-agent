@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service android:name="com.kai.agent.voice.FixtureRecognitionService" android:exported="true" android:permission="android.permission.RECORD_AUDIO">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+        </service>
+        <service android:name="com.kai.agent.voice.FixtureTtsService" android:exported="true" android:label="KAI test speech">
+            <intent-filter><action android:name="android.intent.action.TTS_SERVICE" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+            <meta-data android:name="android.speech.tts" android:resource="@xml/fixture_tts" />
+        </service>
+    </application>
+</manifest>

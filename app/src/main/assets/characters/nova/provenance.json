@@ -1,0 +1,64 @@
+{
+  "character": "Nova",
+  "concept": "curious alien",
+  "textureSource": "Generated with built-in OpenAI image_gen for the KAI Android project",
+  "textureGeneratedFile": "exec-73ce67eb-d4d7-4046-9b5e-094b5af90cb2.png",
+  "generatedOn": "2026-11-16",
+  "prompt": "Use case: stylized-concept. Asset type: production character texture for an Android AI companion, front-facing full-body neutral animation pose, transparent background. Create NOVA, an adorable curious alien from the same premium 3D cartoon universe as a glossy white-and-blue chibi robot. Pearlescent soft lavender skin, a very large rounded head with two short antennae topped by tiny turquoise luminous pearls, small ears, compact indigo space suit with soft silver collar and turquoise oval chest gem, plump mitten hands and little boots. Premium polished 3D animated movie toy render with lovely highlights, subtle surface texture, appealing silhouette, soft studio light. Exact composition: single character straight-on, symmetrical neutral standing pose, oversized head centered in upper 50% of portrait canvas, neck seam at 52% height, compact torso at 54\u201376%, boots at 78\u201394%. Arms held a little away from body angled down, separated from torso by clear transparent gaps. All extremities fully in frame, 8% padding. The facial area must be smooth blank lavender skin: NO eyes, eyebrows, nose, or mouth, because a game engine overlays the expressive face; cheeks may have gentle blush. Antennae and ears are attached to head. Do not add text, a floor, shadow, background, props, extra characters, watermark, or checker pattern. Keep character sincerely cute and polished; no flat vector, no low-poly. Actual transparent alpha cutout.",
+  "textureChanges": "None; the original RGBA PNG is copied byte-for-byte.",
+  "rig": "Connected native Android Canvas bitmap mesh, using the original unchanged raster source and original face artwork. Continuous neck weights and placed shoulder, elbow and wrist bones produce eased greetings. NativeCharacterMotion and NativeCharacterView follow app state, audible speech, reduced motion and foreground visibility. The app does not execute the reference motion.js browser renderer.",
+  "textureDimensions": [
+    1199,
+    1312
+  ],
+  "viewBox": [
+    -70,
+    -35,
+    1339,
+    1392
+  ],
+  "silhouetteClip": "SVG contour around the main alpha silhouette (alpha >64, 1px contour margin) excludes faint disconnected generator matte speckles; source raster remains byte-for-byte unchanged.",
+  "poster": "Neutral SVG rig rendered with Inkscape and encoded as WebP with alpha preserved by ImageMagick.",
+  "files": {
+    "nova.svg": {
+      "bytes": 7715,
+      "sha256": "476f626d5998812bee081bf622178bd8c861df65907722891ebef96c05df54dd"
+    },
+    "nova-poster.webp": {
+      "bytes": 47618,
+      "sha256": "7af7c5d5d519acded685bd6d9ad811af3f3a3a6ca8af828c6a9732041a1aaca5"
+    },
+    "nova.css": {
+      "bytes": 4943,
+      "sha256": "e26922d96ceb0b5fb342008718a0bbd0e04360aa2eaadd8a1fbbbc1d7dd10a73"
+    },
+    "nova-texture.png": {
+      "bytes": 1157576,
+      "sha256": "7fe424affafb962d6c0e26e1fb620befc3e1bcae286811edd5ee5564a16a18b2"
+    }
+  },
+  "animationVersion": "0.4.10-alpha",
+  "nativeDerivedAssets": {
+    "native/nova/brows.webp": {
+      "bytes": 1176,
+      "sha256": "0e807727af4c173a64c6f158096d5c361d6263553ce66bbbd1f8d9d717768931"
+    },
+    "native/nova/eyes.webp": {
+      "bytes": 4888,
+      "sha256": "698facf7be32e1045db99cebf86ed54d3cd54bb562b8dc788c2847ed21e9ef52"
+    },
+    "native/nova/mouth.webp": {
+      "bytes": 1138,
+      "sha256": "73b3e2f7e86e7003104bc9e88e481abdb5ae46741f86c5388af19b6994149bce"
+    },
+    "native/nova/skin.webp": {
+      "bytes": 667356,
+      "sha256": "6508205abaec86ea49e47fcd788f0f8b632b044c2e5dd1e23c82313553f19645"
+    },
+    "native/nova/smile.webp": {
+      "bytes": 1274,
+      "sha256": "4ecbe7aed6bef60ce50e73ca6b1016670e7374835e84f1bba03739846e59daff"
+    }
+  },
+  "nativeManifestSha256": "fe940fba8b33d26e9d0de5fa25dd3dd89ca7cf1b2def7f2e33bf844b2a88d252"
+}

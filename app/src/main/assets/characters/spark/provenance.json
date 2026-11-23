@@ -1,0 +1,64 @@
+{
+  "character": "Spark",
+  "concept": "fuzzy monster",
+  "textureSource": "Generated with built-in OpenAI image_gen for the KAI Android project",
+  "textureGeneratedFile": "exec-c2ab099c-24de-41a2-9632-c593cd652f5e.png",
+  "generatedOn": "2026-11-16",
+  "prompt": "Use case: stylized-concept. Asset type: production character texture for an Android AI companion, front-facing full-body neutral animation pose, transparent background. Create SPARK, an adorable quick-witted fuzzy monster from the same premium 3D cartoon universe as a glossy chibi robot. Plush apricot-orange fluffy fur with honey golden highlights, two small rounded cream horns, little curved ears, oversized round head, compact plump body, short rounded arms with broad soft mitten paws, stubby feet, a tiny teal lightning-shaped enamel badge on chest. Distinctive irresistible fuzzy mascot, premium animated movie-quality 3D render, detailed soft clean fur tufts with controlled silhouette, studio light. Exact composition: single character straight-on, symmetrical neutral standing pose, oversized head centered in upper 50% of portrait canvas, subtle neck seam at 52% height, torso at 54\u201376%, feet at 78\u201394%. Arms held a little away from body angled down with clear transparent gaps from torso. All extremities in frame, 8% padding. Face must have a large smooth peach-colored oval muzzle/face area with NO eyes, eyebrows, nose, or mouth, because a game engine overlays all expression. Keep generous blank space on the face. No text, floor, cast shadow, background, props, extra characters, watermark, or checker pattern. No flat vector, no low-poly. Actual transparent alpha cutout.",
+  "textureChanges": "None; the original RGBA PNG is copied byte-for-byte.",
+  "rig": "Connected native Android Canvas bitmap mesh, using the original unchanged raster source and original face artwork. Continuous neck weights and placed shoulder, elbow and wrist bones produce eased greetings. NativeCharacterMotion and NativeCharacterView follow app state, audible speech, reduced motion and foreground visibility. The app does not execute the reference motion.js browser renderer.",
+  "textureDimensions": [
+    1199,
+    1312
+  ],
+  "viewBox": [
+    -70,
+    -35,
+    1339,
+    1392
+  ],
+  "silhouetteClip": "SVG contour around the main alpha silhouette (alpha >64, 1px contour margin) excludes faint disconnected generator matte speckles; source raster remains byte-for-byte unchanged.",
+  "poster": "Neutral SVG rig rendered with Inkscape and encoded as WebP with alpha preserved by ImageMagick.",
+  "files": {
+    "spark-texture.png": {
+      "bytes": 2221411,
+      "sha256": "f720173153db3cbb62642104bb62856056c37bc3cff380c6f9db0daaf6af671f"
+    },
+    "spark.css": {
+      "bytes": 4943,
+      "sha256": "78fc74f6821c6b4b74a763a5caeb0e0daa2362942b614782279b63e3c86f029f"
+    },
+    "spark.svg": {
+      "bytes": 15764,
+      "sha256": "4b7a1b116bef17e8a13b8486bb62d334a31845423176a7d9512ebbbb245e802d"
+    },
+    "spark-poster.webp": {
+      "bytes": 89478,
+      "sha256": "93cea987f2a69ffa417393f54b7c8c11249228d2ddb36a365352f22c6aad3dde"
+    }
+  },
+  "animationVersion": "0.4.10-alpha",
+  "nativeDerivedAssets": {
+    "native/spark/brows.webp": {
+      "bytes": 1168,
+      "sha256": "a3ed92b5cb85402e8e94c14bbfca6623bf996f13eaca05284f873d419ffd7a32"
+    },
+    "native/spark/eyes.webp": {
+      "bytes": 7048,
+      "sha256": "025b5b178efc72fe5de6c01989aa79747712543f68e57dc0f22419aec9105115"
+    },
+    "native/spark/mouth.webp": {
+      "bytes": 1150,
+      "sha256": "d6058c175a25fac7c0d8b856fa0ef27aa730c4f9ec47b25be15b70fb222c5c66"
+    },
+    "native/spark/skin.webp": {
+      "bytes": 1393066,
+      "sha256": "dce1addc632ede72ecea562639ace815790f5f5573685f855a44ee888e8220d6"
+    },
+    "native/spark/smile.webp": {
+      "bytes": 1510,
+      "sha256": "a063904e27cfb3e1b3b80b186281e3a0d84d43860ba7d90588a3e05fff9d437e"
+    }
+  },
+  "nativeManifestSha256": "fe940fba8b33d26e9d0de5fa25dd3dd89ca7cf1b2def7f2e33bf844b2a88d252"
+}

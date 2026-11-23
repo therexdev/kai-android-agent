@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "revision": 7,
+  "settings": {
+    "selectedProvider": "OPENAI",
+    "koinos": {
+      "endpoint": "",
+      "apiKey": "",
+      "model": ""
+    },
+    "openai": {
+      "endpoint": "http://10.0.2.2:18765/v1",
+      "apiKey": "upgrade-openai-fixture-key",
+      "model": "kai-local-test"
+    },
+    "routing": "LOCAL_ONLY",
+    "selectedCharacterId": "kai",
+    "connectionsBaseUrl": "https://koinosai.com",
+    "connectionsSessionToken": "legacy-session-fixture",
+    "accountId": "legacy-owner-42",
+    "accountDisplayName": "Upgrade fixture",
+    "connectionGeneration": "legacy-generation",
+    "memoryEnabled": true,
+    "reducedMotion": true,
+    "isDarkTheme": true,
+    "speechRate": 1.0
+  },
+  "characters": [
+    {
+      "id": "kai",
+      "name": "KAI",
+      "description": "Upgrade fixture character",
+      "systemPrompt": "Be helpful and accurate.",
+      "voiceId": "",
+      "accentColor": 4284996289,
+      "memoryScopes": [
+        "personal"
+      ],
+      "builtIn": true
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "description": "Upgrade fixture character",
+      "systemPrompt": "Be helpful and accurate.",
+      "voiceId": "",
+      "accentColor": 4284996289,
+      "memoryScopes": [
+        "personal"
+      ],
+      "builtIn": true
+    },
+    {
+      "id": "sage",
+      "name": "Sage",
+      "description": "Upgrade fixture character",
+      "systemPrompt": "Be helpful and accurate.",
+      "voiceId": "",
+      "accentColor": 4284996289,
+      "memoryScopes": [
+        "personal"
+      ],
+      "builtIn": true
+    },
+    {
+      "id": "spark",
+      "name": "Spark",
+      "description": "Upgrade fixture character",
+      "systemPrompt": "Be helpful and accurate.",
+      "voiceId": "",
+      "accentColor": 4284996289,
+      "memoryScopes": [
+        "personal"
+      ],
+      "builtIn": true
+    }
+  ],
+  "conversations": [
+    {
+      "id": "upgrade-conversation",
+      "title": "Upgrade fixture",
+      "characterId": "kai",
+      "createdAt": 1794787200000,
+      "updatedAt": 1794787200000,
+      "temporary": false,
+      "messages": [
+        {
+          "id": "upgrade-message",
+          "role": "user",
+          "text": "Remember upgrade-safe memory.",
+          "createdAt": 1794787200000,
+          "interrupted": false,
+          "provider": "",
+          "model": "",
+          "spokenCharacters": null
+        }
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "id": "upgrade-memory",
+      "text": "I prefer upgrade-safe memory.",
+      "scope": "personal",
+      "source": {
+        "kind": "user",
+        "ref": "upgrade-message",
+        "conversationId": "upgrade-conversation",
+        "snippet": "Remember upgrade-safe memory."
+      },
+      "origin": "EXPLICIT_USER",
+      "revision": 2,
+      "createdAt": 1794787200000,
+      "updatedAt": 1794787200000,
+      "pinned": true,
+      "confidence": 1.0,
+      "lineageIds": []
+    }
+  ],
+  "memoryTombstones": [
+    {
+      "factId": "upgrade-forgotten",
+      "normalizedTextHash": "3ec1d1e665a90aa7fad8e6b1e2557d2f625be48215223f1faae2ef9c2adccff1",
+      "sourceHash": "",
+      "deletedAt": 1794787200000,
+      "revision": 1,
+      "lineageIds": [],
+      "reason": "forgotten"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "upgrade-task-ready",
+      "title": "Legacy ready fixture",
+      "instructions": "Never submit this fixture.",
+      "status": "READY",
+      "createdAt": 1794787200000,
+      "updatedAt": 1794787200000,
+      "intent": {
+        "id": "upgrade-intent-ready",
+        "toolName": "legacy_write",
+        "accountId": "ca_legacy",
+        "argumentsJson": "{\"body\":\"fixture only\"}",
+        "connectionGeneration": "legacy-generation",
+        "idempotencyKey": "upgrade-idempotency-ready",
+        "createdAt": 1794787200000,
+        "ownerId": "legacy-owner-42",
+        "toolVersion": "v1",
+        "toolSchemaJson": "{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}},\"required\":[\"body\"]}"
+      },
+      "approvedFingerprint": "legacy-approval-fixture",
+      "approvedAt": 1794787200000,
+      "submittedAt": null,
+      "receipts": [],
+      "events": [],
+      "lastError": "",
+      "conversationId": "upgrade-conversation"
+    },
+    {
+      "id": "upgrade-task-running",
+      "title": "Legacy running fixture",
+      "instructions": "Never submit this fixture.",
+      "status": "RUNNING",
+      "createdAt": 1794787200000,
+      "updatedAt": 1794787200000,
+      "intent": {
+        "id": "upgrade-intent-running",
+        "toolName": "legacy_write",
+        "accountId": "ca_legacy",
+        "argumentsJson": "{\"body\":\"fixture only\"}",
+        "connectionGeneration": "legacy-generation",
+        "idempotencyKey": "upgrade-idempotency-running",
+        "createdAt": 1794787200000,
+        "ownerId": "legacy-owner-42",
+        "toolVersion": "v1",
+        "toolSchemaJson": "{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}},\"required\":[\"body\"]}"
+      },
+      "approvedFingerprint": "legacy-approval-fixture",
+      "approvedAt": 1794787200000,
+      "submittedAt": 1794787200000,
+      "receipts": [],
+      "events": [],
+      "lastError": "",
+      "conversationId": "upgrade-conversation"
+    }
+  ]
+}

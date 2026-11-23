@@ -1,0 +1,51 @@
+/* Local articulated character. No network, audio, scripts or inference. */
+.companion{display:block;width:100%;height:100%;overflow:visible}
+.companion-body{transform-origin:599px 1220px;animation:companion-breathe 5.4s ease-in-out infinite}
+.companion-head{transform-origin:599px 715px;transition:transform .35s ease-in-out}
+.companion-head-motion{transform-origin:599px 715px;animation:companion-curious 13s ease-in-out infinite}
+.companion-gaze{transition:transform .3s ease-out}
+.companion-eyes{transform-origin:599px 444px;animation:companion-blink 6.7s infinite}
+.companion-arm-left{transform-origin:472px 812px;animation:companion-arm 6s ease-in-out infinite}
+.companion-arm-right{transform-origin:727px 812px;animation:companion-arm 6s ease-in-out infinite reverse}
+.companion-mouth-open,.companion-thought,.companion-listen,.companion-success,.companion-work,.companion-surprise{opacity:0}
+.companion-mouth-open{transform-origin:599px 614px}
+.companion-shadow{transform-origin:599px 1290px;animation:companion-ground 5.4s ease-in-out infinite}
+body[data-state=listening] .companion-head{transform:rotate(-4deg)}
+body[data-state=listening] .companion-head-motion{animation:companion-listening 3s ease-in-out infinite}
+body[data-state=listening] .companion-listen{animation:companion-signal 1.7s ease-in-out infinite}
+body:is([data-state=thinking],[data-state=searching],[data-state=review]) .companion-head{transform:rotate(5deg)}
+body:is([data-state=thinking],[data-state=searching],[data-state=review]) .companion-head-motion{animation:companion-busy 3s ease-in-out infinite}
+body:is([data-state=thinking],[data-state=searching]) .companion-gaze{transform:translate(11px,-12px)}
+body:is([data-state=thinking],[data-state=review]) .companion-thought{opacity:1}
+body[data-state=searching] .companion-work{opacity:1;animation:companion-signal 1.7s ease-in-out infinite}
+body:is([data-state=thinking],[data-state=searching],[data-state=review]) .companion-arm-left{animation:none;transform:rotate(14deg)}
+body[data-state=speaking] .companion-head-motion{animation:companion-talking 1.7s ease-in-out infinite}
+body[data-state=speaking] .companion-arm-right{animation:companion-gesture 3.2s ease-in-out infinite}
+body[data-state=speaking][data-audible=true] .companion-smile{opacity:0}
+body[data-state=speaking][data-audible=true] .companion-mouth-open{opacity:1;animation:companion-speech .24s ease-in-out infinite alternate}
+body[data-state=speaking][data-audible=false] .companion-mouth-open{opacity:0;animation:none}
+body[data-state=success] .companion-success{opacity:1;animation:companion-signal 1.2s ease-in-out infinite}
+body[data-state=success] .companion-body{animation:companion-celebrate 1.3s ease-in-out infinite}
+body[data-state=error] .companion-head{transform:rotate(-5deg)}
+body[data-state=error] .companion-head-motion{animation:companion-listening 4s ease-in-out infinite}
+body.waving .companion-arm-left{animation:companion-wave 2.4s ease-in-out}
+body.waving .companion-head-motion{animation:companion-hello 2.4s ease-in-out}
+body.asleep .companion-eyes{animation:none;transform:scaleY(.08)}
+body.asleep .companion-body{animation-duration:8s}
+body.motion-off .companion *,body.suspended .companion *{animation:none!important;transition:none!important}
+body.motion-off .companion-gaze,body.suspended .companion-gaze{transform:none}
+@media(prefers-reduced-motion:reduce){.companion *{animation:none!important;transition:none!important}.companion-gaze{transform:none}}
+@keyframes companion-breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes companion-ground{0%,100%{transform:scaleX(1);opacity:.55}50%{transform:scaleX(.94);opacity:.35}}
+@keyframes companion-curious{0%,20%,49%,100%{transform:rotate(0)}28%,36%{transform:rotate(-2deg)}70%,81%{transform:rotate(2deg)}}
+@keyframes companion-blink{0%,37%,41%,74%,78%,100%{transform:scaleY(1)}39%,76%{transform:scaleY(.05)}}
+@keyframes companion-arm{0%,100%{transform:rotate(0)}50%{transform:rotate(2deg)}}
+@keyframes companion-listening{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes companion-busy{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes companion-signal{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes companion-talking{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(1deg) translateY(3px)}}
+@keyframes companion-speech{from{transform:scale(1,.25)}to{transform:scale(1,1)}}
+@keyframes companion-gesture{0%,100%{transform:rotate(0)}35%,65%{transform:rotate(-12deg)}}
+@keyframes companion-wave{0%,100%{transform:rotate(0)}20%,72%{transform:rotate(43deg)}32%,56%,82%{transform:rotate(57deg)}44%,68%{transform:rotate(45deg)}}
+@keyframes companion-hello{0%,100%{transform:rotate(0)}25%,70%{transform:rotate(-4deg)}45%,85%{transform:rotate(3deg)}}
+@keyframes companion-celebrate{0%,100%{transform:translateY(0)}40%{transform:translateY(-20px)}65%{transform:translateY(-5px)}}

@@ -1,0 +1,16 @@
+# 0.4.12 validation
+
+- All 296 JVM tests passed: zero failures, errors or skips. New coverage checks natural save commands, exact-user-quotation memory proposals, forgotten/temporary source rejection, spoken bare URLs, every streaming split, and interruption/source offsets.
+- Android lint: zero errors, six existing warnings. Universal app, ARM64 phone APK and instrumentation APK build successfully.
+- Android 9/API 28 x86_64 software emulator: seeded a structured name and legacy note on signed 0.4.11, installed signed 0.4.12 in place without uninstalling or clearing data, and verified both persisted records and their real FTS/read path. The seed passed on the old version; the upgrade verification passed on the new version.
+- All ten existing GraphMemoryDeviceTest storage tests passed, including legacy migration, preserving unreadable data, explicit saves with automatic memory off, temporary/disabled modes, forget/old import, undo and corrections across restart.
+- Both new MemoryConversationDeviceTest tests passed through the real KaiViewModel, encrypted store and SSE client, once each with Koinos and OpenAI configurations. They verify natural explicit save, cross-conversation recall, explicit save with automatic memory off, referential save/review using exact human text, model-proposed review without Connections, local model memory lookup and temporary-chat protection. Provider responses come from MockWebServer; no live inference accounts or external writes were used.
+- Final-app device checks: 13 distinct passing tests, plus the successful old-version seed. The Compose screen-based natural-memory test failed with Espresso AppNotIdleException (MAIN_LOOPER_HAS_IDLED timeout). Its full failure is retained here. The direct controller tests above exercise its save/recall flow without Compose idling; they do not establish that the UI test passed. The remaining two new Compose scenarios were not run after the timing failure.
+- The phone APK payload is byte-for-byte identical to corresponding entries in the tested universal APK; see payload-verification.json. The phone package contains only ARM64 native libraries.
+- The original alpha signing certificate is retained: SHA-256 a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89. Signature and alignment verification passed. Private signing material is excluded from deliverables.
+
+## Limits and installation
+
+Install 0.4.12 over the existing KAI (Alpha) app; do not uninstall or clear app data first. Existing encrypted storage and its migration are unchanged. The upgrade test demonstrates preservation of synthetic records; it cannot establish why the owner's earlier name entry disappeared or recover data from their phone. Check the Personal and project locations in Memory. Existing explicit forget and conversation-deletion semantics remain in effect.
+
+URL pronunciation is verified at the source-mapped speech-text layer, including streaming and interruptions; physical-phone TTS/audio has not been retested here. The Personal/project location selector also needs a physical-phone check. Live provider behavior remains model-dependent, while supported explicit save and recall commands run through the phone independently of inference. No user personal details or private credentials were embedded in fixtures.

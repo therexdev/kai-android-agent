@@ -1,0 +1,11 @@
+# Slow local-model transport — 0.4.25
+
+The reported 0.4.24 failures returned HTTP 524 after approximately 125 seconds without model content. The phone's 300-second read/360-second call limits were longer; the Remote Access service was waiting for model headers before sending any bytes through the relay. This evidence identifies the timeout boundary, not why the particular model was slow or whether it would choose a correct action.
+
+Remote Access 0.3.6 sends an SSE comment every 15 seconds while waiting for model loading, prompt processing or generation. Complete model frames are forwarded intact so heartbeats cannot split JSON. Fast errors preserve HTTP status; late errors carry a safe structured status/category within the stream. No request is automatically replayed. The remote total bound is 170 seconds, with headroom before Core 0.7.32's 180-second network bound. Direct local requests retain four minutes. Non-streaming requests cannot use SSE keep-alives.
+
+The phone already ignores SSE comments. This update also accepts verified context metadata after an early keep-alive commits headers, validates its numeric bounds, and retains structured error status for diagnostics. A timeout is reported as a timeout rather than an unexplained model rejection. Metadata and comments never count as generated content or completed actions. Existing exact approvals, durable task submission, UNKNOWN/no-replay handling and encrypted history remain unchanged.
+
+Install the signed 0.4.25 APK over the existing app. Update Remote Access to 0.3.6 in Core Plugins and fully quit/reopen Core. Keep the same API address, key and model. Run the test once and export Report → Save report if it fails. A 170-second failure now means the bounded remote wait expired, rather than proving insufficient context or a wrong action. Longer remote waits require a separate Core/network contract change or an asynchronous job protocol.
+
+Validation includes mocked Android SSE streams and delayed content, plugin auth/cancellation/error regressions, the real Core SDK/runtime context fixture and a 140-second loopback integration through the actual relay implementation and a 125-second idle proxy. The hosted relay could not be reached from the build workspace. No physical-phone, real-model or Google-action completion is claimed.
