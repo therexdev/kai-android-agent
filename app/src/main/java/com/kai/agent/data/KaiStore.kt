@@ -119,7 +119,7 @@ class KaiStore(context: Context) {
             val (proposed, result) = block(mutableState.value)
             WorkspaceRules.validate(proposed)
             val projected = MemoryGraphRules.projectLegacy(proposed)
-            val next = proposed.copy(memoryGraph = MemoryGraphRules.validateAndClean(mutableState.value.memoryGraph, projected, proposed))
+            val next = ActionContextPrivacy.apply(mutableState.value,proposed.copy(memoryGraph = MemoryGraphRules.validateAndClean(mutableState.value.memoryGraph, projected, proposed)))
             if (next != mutableState.value) {
                 val committed = next.copy(revision = mutableState.value.revision + 1)
                 writeLocked(committed)
@@ -426,12 +426,15 @@ class KaiStore(context: Context) {
     suspend fun transitionTask(taskId: String, status: TaskStatus, detail: String = ""): AgentTask =
         editTask(taskId) { task, settings -> TaskRules.transition(task, status, settings, detail) }
 
-    suspend fun recordReceipt(taskId: String, receipt: ActionReceipt, status: TaskStatus): AgentTask = editTask(taskId) { task, settings ->
+    suspend fun recordReceipt(taskId: String, receipt: ActionReceipt, status: TaskStatus, resultContext: String? = null): AgentTask = editTask(taskId) { task, settings ->
         task.intent?.let { intent ->
             require(receipt.operationId == intent.idempotencyKey || receipt.operationId == intent.id) { "The receipt does not belong to this action." }
         }
         require(status in setOf(TaskStatus.ACCEPTED, TaskStatus.SUCCEEDED, TaskStatus.UNKNOWN, TaskStatus.FAILED)) { "Invalid receipt outcome." }
-        val withReceipt = task.copy(receipts = (task.receipts + receipt).distinctBy { Triple(it.operationId, it.status, it.providerId) })
+        val conversation=state.value.conversations.firstOrNull { it.id==task.conversationId }
+        val contextLive=conversation!=null && task.createdAt>conversation.contextAfter && task.createdAt>(state.value.projects.firstOrNull { it.id==conversation.projectId }?.forgottenBefore ?: 0) &&
+            task.createdAt>(state.value.memoryTombstones.maxOfOrNull { it.deletedAt } ?: 0) && task.createdAt>(state.value.memoryGraph.suppressions.maxOfOrNull { it.deletedAt } ?: 0)
+        val withReceipt = task.copy(resultContext=if(contextLive) resultContext?.take(24000) ?: task.resultContext else "", receipts = (task.receipts + receipt).distinctBy { Triple(it.operationId, it.status, it.providerId) })
         if (withReceipt.status == status) withReceipt.copy(updatedAt = now())
         else TaskRules.transition(withReceipt, status, settings, receipt.summary)
     }

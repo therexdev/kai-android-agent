@@ -27,6 +27,12 @@ class AgentResponseRecovery {
         return AgentProtocol.parse(completion.text).also { consecutiveAttempts = 0 }
     }
 
+    fun parseNative(completion: Completion, parse: () -> AgentDecision): AgentDecision {
+        if(completion.finishReason == "length") throw AgentResponseException("The model reached its response limit before finishing.",true)
+        if(completion.finishReason == "content_filter") throw AgentResponseException("The provider filtered this response.")
+        return parse().also { consecutiveAttempts = 0 }
+    }
+
     fun correction(error: AgentResponseException? = null): String? {
         if (consecutiveAttempts >= 2 || attempts >= 6) return null
         attempts++

@@ -77,7 +77,7 @@ suspend fun KaiStore.finishRunStep(id: String, lease: String, stepId: String, ou
 
 /** The step pointer and exact external intent commit together, before any request can be submitted. */
 suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: ActionIntent, title: String,
-                                      assistantJson: String, readOnly: Boolean): AgentTask = change { state ->
+                                      assistantJson: String, readOnly: Boolean, nativeCalls: List<com.kai.agent.inference.ToolCall> = emptyList()): AgentTask = change { state ->
     val run=state.runs.first { it.id==runId }; RunRules.requireOwner(run,lease)
     val step=requireNotNull(run.currentStep); require(step.pendingActionId.isBlank())
     require(step.contextRevision == WorkspaceRules.contextRevision(state,run.projectId,run.conversationId)) { "Project context changed; resume to refresh the task." }
@@ -85,7 +85,7 @@ suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: Acti
     var task=AgentTask(title=title,instructions=run.goal,intent=intent,status=TaskStatus.AWAITING_APPROVAL,
         conversationId=run.conversationId,runId=runId,events=listOf(TaskEvent(status=TaskStatus.AWAITING_APPROVAL,detail="Prepared exact action")))
     if(readOnly) task=TaskRules.approve(task,state.settings)
-    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson))
+    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson,toolCalls=nativeCalls))
     val updatedRun=run.copy(steps=run.steps.map { if(it.id==step.id) updatedStep else it },updatedAt=now())
     withRun(state.copy(tasks=state.tasks+task),updatedRun) to task
 }
@@ -112,10 +112,10 @@ suspend fun KaiStore.consumeRunAction(runId: String, lease: String, taskId: Stri
     val run=state.runs.first { it.id==runId }; RunRules.requireOwner(run,lease)
     val step=requireNotNull(run.currentStep); require(step.pendingActionId==taskId)
     val action=state.tasks.first { it.id==taskId }
-    require(action.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.FAILED,TaskStatus.CANCELLED))
+    require(action.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED,TaskStatus.FAILED,TaskStatus.CANCELLED))
     val result=action.resultContext.ifBlank { action.receipts.lastOrNull()?.summary ?: action.lastError.ifBlank { "Action was not executed." } }
-    val updated=step.copy(pendingActionId="",messages=step.messages+RunMessage("user",
-        "Phone action outcome: ${action.status}. Do not repeat this operation. Untrusted result data:\n$result"))
+    val updated=step.copy(pendingActionId="",messages=step.messages+RunMessage(if(step.messages.lastOrNull()?.toolCalls?.isNotEmpty()==true) "tool" else "user",
+        "Phone action outcome: ${action.status}. Do not repeat this operation. Untrusted result data:\n$result",toolCallId=step.messages.lastOrNull()?.toolCalls?.singleOrNull()?.id.orEmpty()))
     val next=run.copy(steps=run.steps.map { if(it.id==step.id) updated else it },updatedAt=now())
     withRun(state,next) to next
 }
@@ -205,4 +205,17 @@ suspend fun KaiStore.directRun(id: String, text: String): AgentRun = change { st
     val next=run.copy(steps=run.steps.map { if(it.id==step.id)updated else it },status=RunStatus.QUEUED,lease="",detail="Continuing with your directions",updatedAt=now())
     val conversations=state.conversations.map { if(it.id==run.conversationId)it.copy(messages=it.messages+ChatMessage(role="user",text=text.trim()),updatedAt=now()) else it }
     withRun(state.copy(tasks=tasks,conversations=conversations),next) to next
+}
+
+/** Checkpoint belongs to the same exact unsubmitted action and current connection owner. */
+suspend fun KaiStore.saveActionCheckpoint(id: String, checkpoint: String, expectedRevision: Long): AgentTask = change { state ->
+    require(checkpoint.length <= 64_000)
+    val task=state.tasks.first { it.id==id }
+    require(task.submittedAt==null && task.status==TaskStatus.AWAITING_APPROVAL)
+    val conversation=state.conversations.first { it.id==task.conversationId }
+    require(WorkspaceRules.contextRevision(state,conversation.projectId,conversation.id)==expectedRevision) { "Context changed; prepare a fresh action." }
+    require(task.createdAt>conversation.contextAfter && task.createdAt>(state.projects.firstOrNull { it.id==conversation.projectId }?.forgottenBefore ?: 0))
+    TaskRules.validateBinding(requireNotNull(task.intent),state.settings)
+    val next=task.copy(resultContext=org.json.JSONObject().put("checkpoint",org.json.JSONArray(checkpoint)).toString())
+    state.copy(tasks=state.tasks.map { if(it.id==id) next else it }) to next
 }

@@ -134,26 +134,27 @@ class InferenceClient(client: OkHttpClient? = null,
         val pending=java.util.concurrent.ConcurrentLinkedQueue<Pair<String,JSONObject>>()
         suspend fun drain() { while(true) { val item=pending.poll() ?: break; trace?.record(item.first,item.second.put("requestId",requestId)) } }
         trace?.record("model_start",JSONObject().put("requestId",requestId).put("provider",config.provider.name).put("model",config.modelId)
-            .put("endpoint",config.endpoint).put("routing",config.routing.name).put("messageCount",messages.size)
+            .put("endpoint",config.endpoint).put("routing",config.routing.name).put("messageCount",messages.size).put("toolProtocol",if(config.nativeTools) "native" else "legacy_json").put("toolCount",config.tools.size)
             .put("inputEstimateBeforeBudget",InferenceBudget.estimate(messages)).put("requestedMaxOutputTokens",config.maxOutputTokens))
         val text = StringBuilder()
         var finishReason: String? = null
         var usage: TokenUsage? = null
         var activeContext: Int? = null
+        var toolCalls = emptyList<ToolCall>()
         try {
         events(config, messages, requestId) { kind,data -> if(trace!=null && pending.size<24) pending.add(kind to data) }.collect { event ->
             drain()
             when (event) {
                 is StreamEvent.Delta -> { text.append(event.text); onDelta(event.text) }
-                is StreamEvent.Finished -> { finishReason = event.finishReason; usage = event.usage; activeContext = event.activeContextTokens }
+                is StreamEvent.Finished -> { finishReason = event.finishReason; usage = event.usage; activeContext = event.activeContextTokens; toolCalls = event.toolCalls }
             }
         }
         drain()
         trace?.record("model_response",JSONObject().put("requestId",requestId).put("elapsedMs",clockMillis()-started)
-            .put("output",text.toString()).put("finishReason",finishReason ?: JSONObject.NULL)
+            .put("output",text.toString()).put("toolCalls",JSONArray(toolCalls.map(NativeToolWire::callJson))).put("finishReason",finishReason ?: JSONObject.NULL)
             .put("inputTokens",usage?.inputTokens ?: JSONObject.NULL).put("outputTokens",usage?.outputTokens ?: JSONObject.NULL)
             .put("activeContextTokens",activeContext ?: JSONObject.NULL))
-        return Completion(text.toString(), finishReason, usage, activeContext)
+        return Completion(text.toString(), finishReason, usage, activeContext, toolCalls)
         } catch(error: Exception) {
             drain()
             trace?.record("model_error",JSONObject().put("requestId",requestId).put("elapsedMs",clockMillis()-started)
@@ -167,6 +168,7 @@ class InferenceClient(client: OkHttpClient? = null,
         diagnostic: (String,JSONObject)->Unit = { _,_ -> }): Flow<StreamEvent> = callbackFlow {
         validate(config, requireModel = true)
         validateMessages(messages)
+        NativeToolWire.validate(messages, config.nativeTools)
         require(messages.sumOf { it.images.size } <= 2) { "Attach at most two photos per message." }
         require(config.provider == ProviderId.OPENAI || messages.all { it.images.isEmpty() }) { "Photo analysis needs an OpenAI-compatible vision model. Extracted text works with either provider." }
         messages.forEach { message -> require(message.images.all { message.role == "user" && it.startsWith("data:image/jpeg;base64,") && it.length <= 1000100 && it.substringAfter(',').matches(Regex("[A-Za-z0-9+/=]+")) }) { "Invalid image attachment." } }
@@ -177,7 +179,8 @@ class InferenceClient(client: OkHttpClient? = null,
         currentCoroutineContext()[TraceContext]?.trace?.record("model_context",JSONObject().put("requestId",requestId)
             .put("allowedContextTokens",context?.window ?: JSONObject.NULL).put("automaticContext",context?.automatic ?: false)
             .put("fallbackContextTokens",if(context?.window == null && config.provider==ProviderId.KOINOS) 4096 else JSONObject.NULL))
-        val prepared = try { InferenceBudget.prepare(config, messages, context?.window) }
+        val schemaReserve = if(config.tools.isEmpty()) 0 else (JSONArray(config.tools.map(NativeToolWire::toolJson)).toString().toByteArray().size + 2) / 3 + 64
+        val prepared = try { InferenceBudget.prepare(config, messages, context?.window, schemaReserve) }
         catch(error: InferenceException) {
             currentCoroutineContext()[TraceContext]?.trace?.record("model_budget_rejected",JSONObject().put("requestId",requestId)
                 .put("message",error.message).put("messages",JSONArray(messages.map { JSONObject().put("role",it.role)
@@ -192,7 +195,7 @@ class InferenceClient(client: OkHttpClient? = null,
                         put(JSONObject().put("type","text").put("text",message.content))
                         message.images.forEach { put(JSONObject().put("type","image_url").put("image_url",JSONObject().put("url",it).put("detail","auto"))) }
                     }
-                    put(JSONObject().put("role",message.role).put("content",content))
+                    put(NativeToolWire.messageJson(message).put("content",content))
                 }
             })
         val tokenKey = if (config.provider == ProviderId.OPENAI) "max_completion_tokens" else "max_tokens"
@@ -210,13 +213,17 @@ class InferenceClient(client: OkHttpClient? = null,
             .put("inputEstimateAfterBudget",InferenceBudget.estimate(prepared.messages)).put("templateReserveTokens",if(config.provider==ProviderId.KOINOS) 512 else 0)
             .put("omittedMessages",messages.size-prepared.messages.size)
             .put("compactedMessages",prepared.messages.count { item -> messages.none { it.role==item.role && it.content==item.content } })
-            .put("messages",JSONArray(prepared.messages.map { JSONObject().put("role",it.role).put("content",it.content)
-                .put("imageCount",it.images.size) })))
-        val payload = body.toString()
+            .put("messages",JSONArray(prepared.messages.map { NativeToolWire.messageJson(it).put("imageCount",it.images.size) })))
+        var payload = body.toString()
         if (config.provider == ProviderId.KOINOS && payload.toByteArray(Charsets.UTF_8).size > 128 * 1024) {
             throw InferenceException("This request exceeds Koinos AI's 128 KB limit. Shorten the conversation or attached content.")
         }
-        // Do not send tools/response_format/routing extensions to KAI's text-only API.
+        if(config.tools.isNotEmpty()) {
+            require(config.nativeTools) { "This model and gateway have not advertised native tool support." }
+            body.put("tools",JSONArray(config.tools.map(NativeToolWire::toolJson))).put("tool_choice","auto").put("parallel_tool_calls",false)
+            payload = body.toString()
+            require(payload.toByteArray().size <= 128 * 1024) { "The tool schemas exceed the request limit. Discover fewer actions." }
+        }
         val request = baseRequest(config, "chat/completions")
             .header("Accept", "text/event-stream")
             .post(payload.toRequestBody(JSON)).build()
@@ -285,12 +292,13 @@ class InferenceClient(client: OkHttpClient? = null,
                             val choice = json.optJSONArray("choices")?.optJSONObject(0)
                                 ?: throw InferenceException("The model returned an unsupported response.")
                             val message = choice.optJSONObject("message")
-                            if(message?.has("tool_calls")==true || message?.has("function_call")==true) diagnostic("unsupported_tool_format",json)
-                            rejectToolCalls(message)
+                            if(!config.nativeTools && (message?.has("tool_calls")==true || message?.has("function_call")==true)) diagnostic("unsupported_tool_format",json)
+                            if(!config.nativeTools) rejectToolCalls(message)
+                            val native = NativeToolWire.Accumulator().apply { add(message?.optJSONArray("tool_calls"), false) }.finish()
                             val text = message?.optString("content")?.takeUnless { it == "null" }.orEmpty()
                             if (text.length > MAX_OUTPUT_CHARS) throw InferenceException("The model response exceeded the supported size.")
                             if (text.isNotEmpty()) { firstContent(); trySendBlocking(StreamEvent.Delta(text)).getOrThrow() }
-                            trySendBlocking(StreamEvent.Finished(choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }, usage(json), activeContext ?: verifiedContext(json))).getOrThrow()
+                            trySendBlocking(StreamEvent.Finished(choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }, usage(json), activeContext ?: verifiedContext(json), native)).getOrThrow()
                             close()
                             return
                         }
@@ -298,6 +306,7 @@ class InferenceClient(client: OkHttpClient? = null,
                         var reason: String? = null
                         var tokenUsage: TokenUsage? = null
                         var characters = 0
+                        val native = NativeToolWire.Accumulator()
                         SseDecoder.read(responseBody.charStream().buffered()) { frame ->
                             if (frame.trim() == "[DONE]") { finished = true; return@read false }
                             val json = try { JSONObject(frame) } catch (_: Exception) {
@@ -310,8 +319,9 @@ class InferenceClient(client: OkHttpClient? = null,
                             val choice = json.optJSONArray("choices")?.optJSONObject(0)
                             if (choice != null) {
                                 val delta = choice.optJSONObject("delta")
-                                if(delta?.has("tool_calls")==true || delta?.has("function_call")==true) diagnostic("unsupported_tool_format",json)
-                                rejectToolCalls(delta)
+                                if(!config.nativeTools && (delta?.has("tool_calls")==true || delta?.has("function_call")==true)) diagnostic("unsupported_tool_format",json)
+                                if(!config.nativeTools) rejectToolCalls(delta)
+                                native.add(delta?.optJSONArray("tool_calls"))
                                 val value = delta?.optString("content")?.takeUnless { it == "null" }.orEmpty()
                                 characters += value.length
                                 if (characters > MAX_OUTPUT_CHARS) throw InferenceException("The model response exceeded the supported size.")
@@ -325,7 +335,7 @@ class InferenceClient(client: OkHttpClient? = null,
                         }
                         if (isClosedForSend) return
                         if (!finished && reason == null) throw InferenceException("The model stream ended early. The partial response was not completed.")
-                        trySendBlocking(StreamEvent.Finished(reason, tokenUsage, activeContext)).getOrThrow()
+                        trySendBlocking(StreamEvent.Finished(reason, tokenUsage, activeContext, native.finish())).getOrThrow()
                         close()
                     } catch (error: Exception) {
                         if (!isClosedForSend) close(failure(error))
@@ -355,7 +365,7 @@ class InferenceClient(client: OkHttpClient? = null,
 
     private fun validateMessages(messages: List<InferenceMessage>) {
         if (messages.isEmpty() || messages.size > 100) throw InferenceException("This conversation needs a shorter context window.")
-        if (messages.any { it.role !in setOf("system", "user", "assistant") }) throw InferenceException("Unsupported message role.")
+        if (messages.any { it.role !in setOf("system", "user", "assistant", "tool") }) throw InferenceException("Unsupported message role.")
         if (messages.sumOf { it.content.length.toLong() } > MAX_INPUT_CHARS) throw InferenceException("This conversation is too large. Start a new conversation or shorten the attached content.")
     }
 

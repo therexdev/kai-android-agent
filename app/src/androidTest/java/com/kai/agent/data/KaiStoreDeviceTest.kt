@@ -136,6 +136,27 @@ class KaiStoreDeviceTest {
         }
     }
 
+
+    @Test fun approvalCheckpointSurvivesEncryptedRestartAndRejectsChangedContext() = runBlocking {
+        withIsolatedContext { context ->
+            val first=openStore(context);first.load()
+            first.updateSettings { it.copy(composioUserId="fixture-owner",composioApiKey="fixture-only-key",connectionGeneration="fixture-generation") }
+            val conversation=first.createConversation()
+            val revision=WorkspaceRules.contextRevision(first.state.value,"",conversation.id)
+            val task=first.createTask("Document","Research projects",conversation.id)
+            first.prepareTaskIntent(task.id,ActionIntent(toolName="GOOGLEDOCS_CREATE_DOCUMENT",accountId="fixture-docs",ownerId="fixture-owner",connectionGeneration="fixture-generation"))
+            val checkpoint="""[{"proposal":"search","result":"Retrieved source https://project.example/"}]"""
+            first.saveActionCheckpoint(task.id,checkpoint,revision)
+            first.close()
+            val reopened=openStore(context);reopened.load()
+            assertTrue(reopened.state.value.tasks.single().resultContext.contains("project.example"))
+            assertEquals(TaskStatus.AWAITING_APPROVAL,reopened.state.value.tasks.single().status)
+            assertNull(reopened.state.value.tasks.single().submittedAt)
+            reopened.updateSettings { it.copy(useMemory=!it.useMemory) }
+            assertTrue(runCatching { reopened.saveActionCheckpoint(task.id,checkpoint,revision) }.isFailure)
+        }
+    }
+
     private val opened = mutableListOf<KaiStore>()
     private fun openStore(context: Context) = KaiStore(context).also(opened::add)
 

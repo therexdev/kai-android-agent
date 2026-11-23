@@ -17,9 +17,13 @@ class WebResearchSession(
     prior: List<InferenceMessage> = emptyList(),
     requireFreshResearch: Boolean = true,
 ) {
+    private val researchRequest = instruction
     private val allowed = Regex("https://[^\\s<>\"]+").findAll(instruction).mapNotNull { match ->
         runCatching { PublicWebPolicy.url(match.value.trimEnd('.', ',', ')', ']')).toString() }.getOrNull()
     }.toMutableSet()
+    private val blockchainScope = Regex("(?i)\\bkoinos\\b").containsMatchIn(instruction) && Regex("(?i)\\b(projects?|ecosystem|blockchain|dapps?)\\b").containsMatchIn(instruction)
+    private var relevantPages = 0
+    private var pageNudged = false
     private var searches = 0
     private var reads = 0
     private var nudged = false
@@ -33,7 +37,7 @@ class WebResearchSession(
     init {
         nudged = prior.any { it.role == "user" && it.content.startsWith("Phone runtime: this request needs public web research.") }
         prior.zipWithNext().forEach { (a, r) ->
-            if(a.role == "assistant" && r.role == "user" && r.content.startsWith(PREFIX))
+            if(a.role == "assistant" && r.role in setOf("user","tool") && r.content.startsWith(PREFIX))
                 runCatching { record(JSONObject(r.content.removePrefix(PREFIX))) }
         }
     }
@@ -50,6 +54,15 @@ class WebResearchSession(
         }
         if((requiresSearch || searches + reads > 0) && !hasEvidence && decision is AgentDecision.PrepareAction)
             throw WebResearchException("Web research has not succeeded. No research-based document or outgoing action was prepared.")
+        if(blockchainScope && requiresSearch && decision is AgentDecision.PrepareAction) {
+            val proposedUrls=Regex("https://[^\\s<>\"\\\\]+") .findAll(decision.arguments.toString()).map { it.value.trimEnd('.',',',')',']',';') }.toSet()
+            if(proposedUrls.any { runCatching { PublicWebPolicy.url(it).toString() }.getOrNull() !in allowed }) return "The document includes a URL that was not supplied by the user, returned in search results, or extracted from a retrieved page. Read or search for that reference first, or omit unsupported entries. Do not invent project links."
+        }
+        if(blockchainScope && requiresSearch && decision is AgentDecision.PrepareAction && relevantPages==0) {
+            if(pageNudged) throw WebResearchException("No relevant blockchain source page was read. The research document was not prepared.")
+            pageNudged=true
+            return "Read a relevant Koinos blockchain source page and follow its ecosystem/project links before preparing the document. Search snippets alone do not verify descriptions. Exclude organizations that share the name but have no evidenced blockchain connection."
+        }
         return null
     }
     suspend fun execute(decision: AgentDecision): String {
@@ -60,10 +73,10 @@ class WebResearchSession(
             when(decision) {
                 is AgentDecision.WebSearch -> {
                     if(searches >= 3) throw WebResearchException("Search limit reached for this turn. Summarize the retrieved evidence or ask for a narrower request.")
-                    client.search(decision.query, braveKey, smallContext)
+                    client.search(scopedQuery(decision.query), braveKey, smallContext)
                 }
                 is AgentDecision.ReadWebPage -> {
-                    if(reads >= 3) throw WebResearchException("Page-reading limit reached for this turn.")
+                    if(reads >= if(explicitResearch(researchRequest)) 6 else 3) throw WebResearchException("Page-reading limit reached for this turn.")
                     val url = PublicWebPolicy.url(decision.url).toString()
                     if(url !in allowed) throw WebResearchException("Read a URL returned by web_search or supplied in the user's request first.")
                     client.read(url, smallContext)
@@ -75,8 +88,27 @@ class WebResearchSession(
             failure(kind,"The web request timed out. No source content was retrieved.")
         } catch(e: CancellationException) { throw e }
         catch(e: Exception) { failure(kind, if(e is WebResearchException) e.message.orEmpty() else "The web request could not be completed.") }
+        if(blockchainScope) {
+            if(result.optString("kind")=="search") {
+                val hits=result.optJSONArray("results")
+                if(hits!=null) for(i in 0 until hits.length()) {
+                    val hit=hits.getJSONObject(i)
+                    hit.put("topicMatch", relevant(hit.optString("title")+" "+hit.optString("snippet"),hit.optString("url")))
+                }
+                result.put("topicPolicy","Koinos blockchain ecosystem. Prioritize topicMatch=true; other name matches require page evidence before inclusion. Exclude unrelated education, religion, consulting and general software organizations.")
+            } else if(result.optString("status")=="ok" && !relevant(result.optString("title")+" "+result.optString("text"),result.optString("url"))) {
+                result.put("status","off_topic").put("message","This excerpt does not establish a Koinos blockchain connection. Do not include it as an ecosystem project without another relevant source.")
+            }
+        }
         record(result)
         return PREFIX + result.toString()
+    }
+    private fun relevant(text: String,url: String): Boolean = url.startsWith("https://koinos.io/") ||
+        Regex("(?i)blockchain|decentraliz|decentralis|smart.contract|proof.of.burn|staking|\\bdapps?\\b|\\bKOIN\\b").containsMatchIn(text)
+    private fun scopedQuery(query: String): String {
+        // KAI's ecosystem name also belongs to unrelated organizations. Preserve the user's topic.
+        return if(Regex("(?i)\\bkoinos\\b").containsMatchIn(researchRequest) && Regex("(?i)\\b(projects?|ecosystem|blockchain|dapps?)\\b").containsMatchIn(researchRequest) &&
+            !Regex("(?i)blockchain|koinos\\.io").containsMatchIn(query)) "$query blockchain".take(300) else query
     }
     private fun record(result: JSONObject) {
         when(result.optString("kind")) { "search" -> searches++; "page" -> reads++ }
@@ -85,11 +117,16 @@ class WebResearchSession(
         if(results != null) for(i in 0 until results.length()) {
             val hit = results.getJSONObject(i)
             val url = PublicWebPolicy.url(hit.getString("url")).toString()
-            allowed += url; sources[url] = hit.optString("title").take(180)
+            allowed += url; if(!blockchainScope || hit.optBoolean("topicMatch",relevant(hit.optString("title")+" "+hit.optString("snippet"),url))) sources[url] = hit.optString("title").take(180)
         }
         if(result.optString("kind") == "page") {
+            relevantPages++
             val url = PublicWebPolicy.url(result.getString("url")).toString()
             allowed += url; sources[url] = result.optString("title").take(180)
+            val links=result.optJSONArray("links")
+            if(links!=null) for(i in 0 until minOf(links.length(),40)) {
+                runCatching { PublicWebPolicy.url(links.getJSONObject(i).getString("url")).toString() }.getOrNull()?.let { allowed += it }
+            }
         }
     }
     fun withSources(reply: String): String {

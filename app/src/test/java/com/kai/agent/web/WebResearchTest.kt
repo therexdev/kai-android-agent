@@ -134,4 +134,39 @@ class WebResearchTest {
         val session=WebResearchSession("Search online",client { _,_ -> calls++;throw WebResearchException("offline") })
         repeat(6){session.execute(AgentDecision.WebSearch("facts"))};assertEquals(6,calls)
     }
+
+    @Test fun ecosystemLinksRemainNavigableWithoutPretendingTheirPagesWereRead() = runBlocking {
+        val visited=mutableListOf<String>()
+        val c=client { url,_ -> visited+=url;WebDocument(url,"<html><title>Blockchain directory</title><nav><a href='/ecosystem'>Ecosystem</a></nav><main>Blockchain projects <a href='https://project.example/'>Project</a><a href='http://127.0.0.1/private'>Unsafe</a></main></html>","text/html") }
+        val session=WebResearchSession("Research Koinos blockchain projects https://koinos.io/",c)
+        val receipt=session.execute(AgentDecision.ReadWebPage("https://koinos.io/"))
+        val data=JSONObject(receipt.removePrefix(WebResearchSession.PREFIX))
+        assertEquals(2,data.getJSONArray("links").length())
+        assertFalse(session.withSources("Directory evidence").contains("project.example"))
+        session.execute(AgentDecision.ReadWebPage("https://project.example/"))
+        assertEquals(listOf("https://koinos.io/","https://project.example/"),visited)
+        val resumed=WebResearchSession("Research Koinos projects",c,prior=listOf(InferenceMessage("assistant",""),InferenceMessage("tool",receipt,toolCallId="call_1")))
+        resumed.execute(AgentDecision.ReadWebPage("https://koinos.io/ecosystem"))
+        assertEquals(3,visited.size)
+    }
+    @Test fun ambiguousProjectSearchKeepsBlockchainScopeAndRejectsUnrelatedPages() = runBlocking {
+        var searchUrl=""
+        val c=client { url,_ -> searchUrl=url;WebDocument(url,html,"text/html") }
+        val session=WebResearchSession("Look up Koinos projects",c)
+        session.execute(AgentDecision.WebSearch("Koinos projects"))
+        assertTrue(searchUrl.contains("blockchain"))
+        val result=session.execute(AgentDecision.ReadWebPage("https://example.org/fact"))
+        assertTrue(result.contains("off_topic"))
+        assertFalse(session.hasEvidence)
+    }
+
+    @Test fun documentReferencesUseCanonicalRetrievedUrlsAndRejectInventedLinks() = runBlocking {
+        val c=client { url,_ -> WebDocument(url,if(url.contains("duckduckgo")) html else "<html><title>Blockchain projects</title><main>Koinos blockchain <a href='https://project.example/'>Project</a></main></html>","text/html") }
+        val session=WebResearchSession("Look up Koinos projects",c)
+        session.execute(AgentDecision.WebSearch("Koinos projects"))
+        session.execute(AgentDecision.ReadWebPage("https://example.org/fact"))
+        fun action(url: String)=AgentDecision.PrepareAction("docs","GOOGLEDOCS_CREATE_DOCUMENT",JSONObject().put("text","Project: $url — source-backed blockchain project."),"")
+        assertNull(session.correction(action("https://project.example")))
+        assertNotNull(session.correction(action("https://invented.example/")))
+    }
 }

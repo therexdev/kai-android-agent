@@ -4,12 +4,13 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Update prepared: 0.4.30
+## Update prepared: 0.4.31
 
-- Research and document tasks can recover from malformed model responses at later steps, with bounded retries that preserve existing action receipts.
-- A response that reaches its output limit gets a larger allowance within the model's reported limits and guidance to write smaller content chunks. Incomplete or conflicting responses remain blocked.
-- Voice playback filters speaker echo with small recognition errors and waits briefly for a stable interruption. Explicit stop/correction words still interrupt immediately.
-- Exported chat reports record speech interruption reasons without recording audio. See [validation](qa/0.4.30/VALIDATION.md) for test coverage and limits.
+- One generic native tool harness serves chat and saved tasks. Discovered actions use their exact schemas and connected accounts; approval and execution remain on the phone. Native calling activates only when the authenticated model catalog advertises support. Older gateways retain the bounded JSON protocol.
+- Approval retains the earlier research results. Document receipts preserve returned URLs, link follow-ups reuse existing resources, and duplicate or uncertain creations cannot be replayed automatically.
+- Research document creation checks the body before review, then requests readback or reports that contents remain unverified. Public page reads retain real outgoing links, and Koinos ecosystem research keeps its blockchain context.
+- Includes 0.4.30 response recovery and voice interruption fixes. Physical-phone audio still requires validation.
+- Gateway transport and activation instructions: [credits PR #107](https://github.com/therexdev/kai/pull/107). Native calling is not active on production merely by installing this APK. See [validation](qa/0.4.31/VALIDATION.md).
 
 ## Account features
 
@@ -47,7 +48,7 @@ The phone owns conversation history, memory, task records, files, and permission
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **36**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **38**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 

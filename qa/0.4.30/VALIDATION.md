@@ -18,4 +18,4 @@
 
 ## Runtime status and limits
 
-Android runtime checks are pending. The first API 30 software emulator reached Android, then hit a kernel watchdog lockup before the APKs were installed. A single-core retry is in progress. No live account or paid inference request has been made, and physical-phone microphone/speaker behavior has not been verified.
+Android runtime checks are pending. The first API 30 software emulator reached Android, then hit a kernel watchdog lockup before the APKs were installed. A single-core retry produced no completed runtime results. No live account or paid inference request has been made, and physical-phone microphone/speaker behavior has not been verified.

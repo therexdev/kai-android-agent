@@ -5,7 +5,7 @@ import java.util.UUID
 
 enum class RunStatus { QUEUED, RUNNING, PAUSED, NEEDS_APPROVAL, BLOCKED, COMPLETED, FAILED, CANCELLED }
 enum class StepStatus { PENDING, RUNNING, COMPLETED, SKIPPED }
-data class RunMessage(val role: String, val content: String)
+data class RunMessage(val role: String, val content: String, val toolCalls: List<com.kai.agent.inference.ToolCall> = emptyList(), val toolCallId: String = "")
 data class RunTool(val accountId: String, val toolId: String, val version: String)
 data class RunStep(
     val id: String = newId(), val title: String, val instructions: String,
@@ -78,7 +78,8 @@ object RunRules {
         run.steps.forEach {
             require(it.instructions.isNotBlank() && it.instructions.length <= 12000 && it.title.length <= 200)
             require(it.output.length <= 24000 && it.messages.sumOf { m -> m.content.length.toLong() } <= 56000)
-            require(it.messages.all { m -> m.role in setOf("system", "user", "assistant") })
+            require(it.messages.all { m -> m.role in setOf("system", "user", "assistant", "tool") })
+            com.kai.agent.inference.NativeToolWire.validate(it.messages.map { m -> com.kai.agent.inference.InferenceMessage(m.role,m.content,toolCalls=m.toolCalls,toolCallId=m.toolCallId) },true,allowPending=it.pendingActionId.isNotBlank())
             require(it.tools.size <= 100 && it.turns in 0..24)
         }
     }

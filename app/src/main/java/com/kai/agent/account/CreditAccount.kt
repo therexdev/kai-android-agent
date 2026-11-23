@@ -12,24 +12,25 @@ data class CreditAccount(
     val wallet: String = "", val model: String = DEFAULT_CREDIT_MODEL, val contextTokens: Int = 4096,
     val maxOutput: Int = 2048, val freeOnly: Boolean = true,
     val linkCode: String = "", val linkSecret: String = "", val linkExpiresAt: Long = 0,
+    val nativeTools: Boolean = false,
 ) {
     override fun toString() = "CreditAccount(credentials=<redacted>)"
     fun json(secrets: Boolean) = if (!secrets) JSONObject() else JSONObject()
         .put("token",token).put("id",id).put("email",email).put("wallet",wallet).put("model",model)
-        .put("contextTokens",contextTokens).put("maxOutput",maxOutput).put("freeOnly",freeOnly)
+        .put("nativeTools",nativeTools).put("contextTokens",contextTokens).put("maxOutput",maxOutput).put("freeOnly",freeOnly)
         .put("linkCode",linkCode).put("linkSecret",linkSecret).put("linkExpiresAt",linkExpiresAt)
     fun inference(output: Int = 2048) = ProviderConfig(ProviderId.KOINOS, "$CREDIT_ORIGIN/platform/api", token, model,
         RoutingMode.NETWORK_ONLY, minOf(output,maxOutput), accountSession=true, creditWallet=wallet,
-        freeOnly=freeOnly, contextTokens=contextTokens, modelOutputLimit=maxOutput)
+        freeOnly=freeOnly, contextTokens=contextTokens, modelOutputLimit=maxOutput, nativeTools=nativeTools)
     companion object {
         fun read(o: JSONObject?) = if(o==null) CreditAccount() else CreditAccount(
             o.optString("token"),o.optString("id"),o.optString("email"),o.optString("wallet"),o.optString("model").ifBlank { DEFAULT_CREDIT_MODEL },
             o.optInt("contextTokens",4096).coerceIn(1024,2_000_000),o.optInt("maxOutput",2048).coerceIn(1,131072),
-            o.optBoolean("freeOnly",true),o.optString("linkCode"),o.optString("linkSecret"),o.optLong("linkExpiresAt"))
+            o.optBoolean("freeOnly",true),o.optString("linkCode"),o.optString("linkSecret"),o.optLong("linkExpiresAt"), o.optBoolean("nativeTools",false))
     }
 }
 data class CreditModel(val id: String,val label: String,val available: Boolean,val freeEligible: Boolean,
-    val maxOutput: Int,val contextTokens: Int,val inputPrice: String,val outputPrice: String)
+    val maxOutput: Int,val contextTokens: Int,val inputPrice: String,val outputPrice: String,val nativeTools: Boolean=false)
 data class AccountOverview(val id: String,val email: String,val wallets: List<String>,val selectedWallet: String,
     val freeCredits: String,val paidCredits: String,val freeState: String,val models: List<CreditModel>,val vaultAvailable: Boolean=false,
     val primaryCreditWallet: String="",val walletLabels: Map<String,String> = emptyMap()) {

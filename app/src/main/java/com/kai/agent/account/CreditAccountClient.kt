@@ -68,7 +68,7 @@ class CreditAccountClient(private val origin: String=CREDIT_ORIGIN, private val 
             credits.getJSONObject("purchased").getString("available"),credits.getJSONObject("free").optString("state"),
             (0 until models.length()).map { i -> val m=models.getJSONObject(i);CreditModel(m.getString("model"),m.optString("label",m.getString("model")),
                 m.optBoolean("available"),m.optBoolean("freeEligible"),m.getInt("maxOutput").coerceIn(1,131072),
-                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion")) },
+                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion"),m.optInt("nativeTools")==1) },
             o.optJSONObject("features")?.optInt("koinVault")==1,primary,labels)
     }
 }
