@@ -27,12 +27,21 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-source.zip' --pattern '*-SHA256SUMS.txt' --dir "$RUNNER_TEMP/kai-release"
           python3 - <<'PY'
           from pathlib import Path, PurePosixPath
-          import hashlib, os, zipfile
+          import hashlib, json, os, subprocess, zipfile
           downloads=Path(os.environ['RUNNER_TEMP'])/'kai-release'
           version=os.environ['RELEASE_TAG'][1:]
+          repo=os.environ['GITHUB_REPOSITORY']
+          releases=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases?per_page=100'],text=True))
+          matching=[r for r in releases if r['tag_name']==os.environ['RELEASE_TAG']]
+          assert len(matching)==1, 'Expected one matching release or draft'
+          downloads.mkdir(parents=True,exist_ok=True)
+          for name in (f'KAI-Android-{version}-source.zip',f'KAI-Android-{version}-SHA256SUMS.txt'):
+              assets=[a for a in matching[0]['assets'] if a['name']==name and a['state']=='uploaded']
+              assert len(assets)==1, 'Expected complete release asset'
+              with (downloads/name).open('wb') as out:
+                  subprocess.run(['gh','api',f"repos/{repo}/releases/assets/{assets[0]['id']}",'-H','Accept: application/octet-stream'],stdout=out,check=True)
           source=downloads/f'KAI-Android-{version}-source.zip'
           sums=downloads/f'KAI-Android-{version}-SHA256SUMS.txt'
           expected={line.split()[1]:line.split()[0] for line in sums.read_text().splitlines() if line.strip()}
