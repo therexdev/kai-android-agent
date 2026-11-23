@@ -4,7 +4,9 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Current release: 0.4.29
+## Update prepared: 0.4.29
+
+The 0.4.29 APK is built and tested, but its GitHub attachment is still pending. The latest published GitHub APK is 0.4.28.
 
 - **Use purchased credits** enables paid balances from credit accounts connected to your website login, including linked Core wallets.
 - **Automatic · connected accounts** follows your primary credit account and can choose another linked account that can cover a request. Select a specific account to pin its balance.
