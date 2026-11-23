@@ -198,6 +198,7 @@ class KaiViewModel(
     private val interruptedSpeech = mutableSetOf<String>()
     private val completedSpeech = mutableSetOf<String>()
     private class SpeechDraft(val conversationId: String, val messageId: String) {
+        var trace: ChatTrace? = null
         var text = ""
         var heard = 0
         var finished = false
@@ -249,6 +250,15 @@ class KaiViewModel(
                 partialTranscript = if (enabled) it.partialTranscript else "") }
         }
         override fun onBargeIn() { cancelInference(); mutableUi.update { it.copy(streamingText = "") } }
+        override fun onSpeechInterrupted(utteranceId: String, reason: String) {
+            val trace = speechDrafts[utteranceId]?.trace ?: return
+            val heard = heardCharacters[utteranceId] ?: 0
+            viewModelScope.launch {
+                runCatching { trace.record("speech_interrupted", JSONObject()
+                    .put("messageId", utteranceId).put("reason", reason)
+                    .put("spokenCharacters", heard)) }
+            }
+        }
         override fun onVoicesChanged(voices: List<VoiceOption>) {
             mutableUi.update { current -> current.copy(voices = voices.filter { LocalVoiceCatalog.isLocalVoice(it.id) }.map {
                 KaiVoice(it.id, it.name, LocalVoiceCatalog.find(it.id)!!.detail, it.languageTag, true)
@@ -607,7 +617,7 @@ class KaiViewModel(
 
         val responseRecovery = com.kai.agent.agent.AgentResponseRecovery()
         val toolRecovery = com.kai.agent.agent.AgentToolRecovery()
-        repeat(12) {
+        repeat(18) {
             ensureActiveTurn(epoch)
             val partial = StringBuilder()
             var speechDraft: SpeechDraft? = null
@@ -648,7 +658,7 @@ class KaiViewModel(
                         if (!draft.finished && foreground && ui.value.voiceEnabled) voice.appendSpeech(draft.messageId, deltaText)
                     }
                 }
-                val completion = inference.stream(config, context.messages()) { delta ->
+                val completion = inference.stream(responseRecovery.requestConfig(config), context.messages()) { delta ->
                     ensureActiveTurn(epoch)
                     partial.append(delta)
                     // Speech and format validation see every delta, including a token followed
@@ -662,7 +672,7 @@ class KaiViewModel(
                 catch (error: com.kai.agent.agent.AgentResponseException) {
                     // Once speech began, a different response must not replace what the user heard.
                     trace?.error("proposal_rejected",error)
-                    val correction = if (speechDraft == null) responseRecovery.correction() else null
+                    val correction = if (speechDraft == null) responseRecovery.correction(error) else null
                     if (correction == null) throw error
                     appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, correction)
                     mutableUi.update { it.copy(streamingText = "Rechecking the model response…") }
@@ -929,7 +939,12 @@ class KaiViewModel(
     private suspend fun createSpeechDraft(cid: String): SpeechDraft {
         val settings = store.state.value.settings
         val message = store.beginVoiceReply(cid, "KOINOS_ACCOUNT", settings.creditAccount.model)
-        return SpeechDraft(cid, message.id).also { speechDrafts[message.id] = it }
+        return SpeechDraft(cid, message.id).also {
+            // Bind to the current privacy epoch before playback; a delayed stop after Forget
+            // cannot create a fresh diagnostic session for the forgotten turn.
+            it.trace = runCatching { store.beginChatTrace(cid, "voice") }.getOrNull()
+            speechDrafts[message.id] = it
+        }
     }
 
     private suspend fun persistSpeechDraft(draft: SpeechDraft) = draft.writes.withLock {

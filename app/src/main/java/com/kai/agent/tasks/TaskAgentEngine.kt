@@ -91,8 +91,9 @@ class TaskAgentEngine(
     private suspend fun runClaimed(id: String, token: String, timeBudgetMillis: Long, trace: com.kai.agent.diagnostics.ChatTrace?): AgentRun? {
         trace?.record("saved_task_start",JSONObject().put("runId",id))
         val started=android.os.SystemClock.elapsedRealtime()
+        val responseRecovery = AgentResponseRecovery()
         suspend fun infer(messages: List<InferenceMessage>): Completion {
-            val provider = config()
+            val provider = responseRecovery.requestConfig(config())
             val remaining = (timeBudgetMillis - (android.os.SystemClock.elapsedRealtime() - started)).coerceAtLeast(1)
             val deadline = minOf(InferenceTimeoutPolicy.taskTurnMillis(provider.provider), remaining)
             trace?.record("saved_inference_deadline", JSONObject().put("timeoutMs", deadline))
@@ -108,7 +109,6 @@ class TaskAgentEngine(
                 val steps=parsePlan(planned.text)
                 store.editRun(id,token) { it.copy(steps=steps,detail="Plan saved · ${steps.size} steps") }
             }
-            val responseRecovery = com.kai.agent.agent.AgentResponseRecovery()
             val toolRecovery = AgentToolRecovery()
             while(true) {
                 currentCoroutineContext().ensureActive()
@@ -143,7 +143,7 @@ class TaskAgentEngine(
                     prior=step.messages.map { InferenceMessage(it.role,it.content) })
                 val decision = try { responseRecovery.parse(completion) }
                 catch (error: com.kai.agent.agent.AgentResponseException) {
-                    val correction = responseRecovery.correction() ?: throw error
+                    val correction = responseRecovery.correction(error) ?: throw error
                     append(com.kai.agent.agent.AgentResponseRecovery.REJECTED, correction)
                     continue
                 }

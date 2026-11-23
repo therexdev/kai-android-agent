@@ -46,6 +46,7 @@ class VoiceController private constructor(context: Context, private val callback
         fun onState(state: VoiceState) {}
         fun onError(message: String) {}
         fun onBargeIn() {}
+        fun onSpeechInterrupted(utteranceId: String, reason: String) {}
         fun onVoicesChanged(voices: List<VoiceOption>) {}
         fun onServiceChanged(onDeviceRecognition: Boolean) {}
         /** Whether the explicitly requested foreground microphone session remains enabled. */
@@ -81,7 +82,7 @@ class VoiceController private constructor(context: Context, private val callback
                 diagnostics.event("audio_focus_loss", change.toLong())
                 preserveUnsentInput()
                 stopListening()
-                stopSpeaking()
+                stopSpeakingInternal("audio_focus_loss")
             }
         }, main).build()
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -108,6 +109,7 @@ class VoiceController private constructor(context: Context, private val callback
         }
     private var recognizerRunning = false
     private var recognitionEpoch = 0
+    private val bargeInConfirmation = BargeInConfirmation()
     private var selectedVoice: String? = KikiVoiceDefaults.VOICE_ID
     private val usesKikiVoice: Boolean get() = LocalVoiceCatalog.isLocalVoice(selectedVoice)
     private var localSpeechOnly = false
@@ -217,6 +219,7 @@ class VoiceController private constructor(context: Context, private val callback
     override fun beginSpeech(utteranceId: String) = onMain {
         if (closed) return@onMain
         stopSpeakingInternal()
+        bargeInConfirmation.clear()
         speech = StreamingSpeechSession(utteranceId)
         diagnostics.event("reply_begin")
         if (usesKikiVoice) local.begin(selectedVoice.orEmpty(), speechRate, speechAttributes)
@@ -341,7 +344,7 @@ class VoiceController private constructor(context: Context, private val callback
     }
 
     private fun speechError(id: String?) = postCurrent(id) {
-        stopSpeakingInternal()
+        stopSpeakingInternal("playback_error")
         callbacks.onError("Speech playback failed. The full response is still available as text.")
     }
 
@@ -411,7 +414,7 @@ class VoiceController private constructor(context: Context, private val callback
                     }
                 }
                 override fun failed(message: String) = postCurrent(chunk.platformId) {
-                    stopSpeakingInternal(); callbacks.onError(message)
+                    stopSpeakingInternal("local_playback_error"); callbacks.onError(message)
                 }
             })
             speechFlushRunnable?.let(main::removeCallbacks); speechFlushRunnable = null
@@ -426,7 +429,10 @@ class VoiceController private constructor(context: Context, private val callback
         }
     }
 
-    private fun stopSpeakingInternal() = finishSpeech(interrupted = true)
+    private fun stopSpeakingInternal(reason: String = "stopped") {
+        speech?.let { callbacks.onSpeechInterrupted(it.id, reason) }
+        finishSpeech(interrupted = true)
+    }
 
     private fun finishSpeech(interrupted: Boolean) {
         val session = speech
@@ -519,6 +525,7 @@ class VoiceController private constructor(context: Context, private val callback
         try {
             sessionSpeechStarted = false
             acceptedUserSpeech = false
+            bargeInConfirmation.clear()
             recognitionEpoch++
             recognitionSegment.begin(recognitionEpoch)
             service.setRecognitionListener(listener(recognitionEpoch))
@@ -565,16 +572,16 @@ class VoiceController private constructor(context: Context, private val callback
             if (!active()) return
             val raw = recognized(partialResults)
             val partial = SpeechEchoGuard.userTranscript(raw, echoReference(), suppressPureEcho = !acceptedUserSpeech)
-            if (partial.isBlank()) { if (raw.isNotBlank()) diagnostics.event("echo_rejected"); return }
+            if (partial.isBlank()) { bargeInConfirmation.clear(); if (raw.isNotBlank()) diagnostics.event("echo_rejected"); return }
             val firstUserPartial = !acceptedUserSpeech
             if (currentUtterance != null) {
-                if (!SpeechEchoGuard.hasBargeInEvidence(partial, echoReference())) return
+                if (!bargeInConfirmation.accept(partial, echoReference(), SystemClock.elapsedRealtime())) return
                 // Capture before notifying VM/cancelling the reply. Never restart the recognizer
                 // here: it is currently recording the new user utterance that caused interruption.
                 recognitionSegment.acceptPartial(epoch, partial)
                 acceptedUserSpeech = true
                 diagnostics.event("barge_in")
-                stopSpeakingInternal()
+                stopSpeakingInternal("recognized_user_speech")
                 callbacks.onBargeIn()
             } else if (firstUserPartial) callbacks.onBargeIn()
             acceptedUserSpeech = true
@@ -590,9 +597,15 @@ class VoiceController private constructor(context: Context, private val callback
             retryCount = 0
             val raw = recognized(results)
             val clean = SpeechEchoGuard.userTranscript(raw, echoReference(), suppressPureEcho = !acceptedUserSpeech)
+            if (currentUtterance != null && !bargeInConfirmation.accept(clean, echoReference(), SystemClock.elapsedRealtime(), final = true)) {
+                recognitionSegment.clear()
+                if (raw.isNotBlank()) diagnostics.event("echo_rejected")
+                scheduleRestart(180)
+                return
+            }
             val result = recognitionSegment.finish(epoch, clean)
             if (result.isNotBlank()) {
-                if (currentUtterance != null) { stopSpeakingInternal(); callbacks.onBargeIn() }
+                if (currentUtterance != null) { stopSpeakingInternal("recognized_user_speech"); callbacks.onBargeIn() }
                 diagnostics.event("user_endpoint")
                 if (accumulator.appendFinal(result, SystemClock.elapsedRealtime())) commitClock.input(SystemClock.elapsedRealtime())
                 callbacks.onPartial(accumulator.text)

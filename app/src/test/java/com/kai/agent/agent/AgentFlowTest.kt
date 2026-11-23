@@ -59,6 +59,42 @@ class AgentFlowTest {
             "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"$finish\"}]}\n\ndata: [DONE]\n\n")
     }
 
+    @Test(timeout = 20_000) fun reportedResearchSequenceRecoversWithoutReplayingTheExistingDocument() = runBlocking {
+        val recovery = AgentResponseRecovery()
+        val messages = AgentTurnContext(listOf(
+            InferenceMessage("system", "Receipt: CREATE accepted, documentId=existing-doc. Never recreate it. INSERT schema: document_id and text."),
+            InferenceMessage("user", "Research Koinos projects and add website links and short descriptions to my existing doc.")))
+        val responses = listOf(
+            "We will do a search.{\"type\":\"web_search\",\"query\":\"Koinos projects\"}" to "stop",
+            """{"type":"web_search","query":"Koinos projects"}""" to "stop",
+            """{"type":"action","accountId":"a","tool":"INSERT","arguments":{"document_id":"existing-doc","text":"unfinished""" to "length",
+            """{"type":"inspect_tool","accountId":"a","tool":"INSERT"}{"type":"reply","text":"Inspect it."}""" to "stop",
+            """{"type":"action","accountId":"a","tool":"INSERT","arguments":{"document_id":"existing-doc","text":"Koinos: https://koinos.io/ — blockchain platform."}}""" to "stop")
+        val budgets = mutableListOf<Int>()
+        var prepared: AgentDecision.PrepareAction? = null
+        for ((raw, finish) in responses) {
+            modelServer.enqueue(streamed(raw, finish))
+            val completion = inference.stream(recovery.requestConfig(config()), messages.messages()) {}
+            val request = JSONObject(modelServer.takeRequest().body.readUtf8())
+            budgets += request.getInt("max_completion_tokens")
+            assertTrue(request.getJSONArray("messages").getJSONObject(0).getString("content").contains("documentId=existing-doc"))
+            try {
+                when (val decision = recovery.parse(completion)) {
+                    is AgentDecision.WebSearch -> messages.append(completion.text, "Source: https://koinos.io/ — blockchain platform")
+                    is AgentDecision.PrepareAction -> prepared = decision
+                    else -> fail("Rejected double-object response was selected")
+                }
+            } catch (error: AgentResponseException) {
+                messages.append(AgentResponseRecovery.REJECTED, requireNotNull(recovery.correction(error)))
+            }
+        }
+        assertEquals(listOf(2048, 2048, 2048, 4096, 4096), budgets)
+        assertEquals("INSERT", requireNotNull(prepared).tool)
+        assertEquals("existing-doc", requireNotNull(prepared).arguments.getString("document_id"))
+        // This loop only prepared an exact proposal. No service write or approval was invoked.
+        assertEquals(5, modelServer.requestCount)
+    }
+
     @Test(timeout = 20_000) fun streamedReplyUsesSameLocalMemoryContextWithEitherProvider() = runBlocking {
         val fact = MemoryFact(id = "preference", text = "I prefer meetings after 10", source = MemorySource(ref = "source"))
         val memory = ContextBuilder.memoryText(listOf(MemoryEvidence(fact, 1.0)))

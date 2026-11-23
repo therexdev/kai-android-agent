@@ -2,6 +2,8 @@ package com.kai.agent.agent
 
 import com.kai.agent.inference.Completion
 import com.kai.agent.inference.InferenceMessage
+import com.kai.agent.inference.ProviderConfig
+import com.kai.agent.inference.ProviderId
 import org.junit.Assert.*
 import org.junit.Test
 import org.json.JSONObject
@@ -69,5 +71,42 @@ class AgentResponseRecoveryTest {
         val text = "An action has this shape: $action"
         val raw = JSONObject().put("type", "reply").put("text", text).toString()
         assertEquals(AgentDecision.Reply(text), AgentProtocol.parse(raw))
+    }
+
+    @Test fun successfulStepsRestoreCorrectionAllowanceButTotalRemainsBounded() {
+        val recovery = AgentResponseRecovery()
+        repeat(3) {
+            repeat(2) { assertNotNull(recovery.correction()) }
+            assertNull(recovery.correction())
+            assertTrue(recovery.parse(Completion("""{"type":"web_search","query":"Koinos projects"}""", "stop")) is AgentDecision.WebSearch)
+        }
+        assertNull(recovery.correction())
+    }
+
+    @Test fun truncatedDocumentRetriesGrowOutputWithoutChangingFundingOrModelLimits() {
+        val recovery = AgentResponseRecovery()
+        val config = ProviderConfig(ProviderId.KOINOS, "https://example.org", "secret", "gpt-oss", maxOutputTokens = 2048,
+            accountSession = true, modelOutputLimit = 6000, freeOnly = true)
+        assertEquals(2048, recovery.requestConfig(config).maxOutputTokens)
+        val error = runCatching { recovery.parse(Completion(action.dropLast(1), "length")) }.exceptionOrNull() as AgentResponseException
+        val correction = recovery.correction(error)!!
+        assertTrue(correction.contains("smaller content chunk"))
+        assertTrue(correction.contains("existing document ID"))
+        assertEquals(config.copy(maxOutputTokens = 4096), recovery.requestConfig(config))
+        recovery.correction(error)
+        assertEquals(config.copy(maxOutputTokens = 6000), recovery.requestConfig(config))
+        assertEquals(2048, recovery.requestConfig(config.copy(modelOutputLimit = 2048)).maxOutputTokens)
+    }
+
+    @Test fun reportedMultipleObjectsRequireFreshResponseAfterTruncation() {
+        val recovery = AgentResponseRecovery()
+        assertNotNull(recovery.correction())
+        recovery.parse(Completion("""{"type":"web_search","query":"Koinos projects"}""", "stop"))
+        val truncated = runCatching { recovery.parse(Completion(action.dropLast(1), "length")) }.exceptionOrNull() as AgentResponseException
+        assertNotNull(recovery.correction(truncated))
+        val multiple = """{"type":"inspect_tool","accountId":"a","tool":"SEARCH"}{"type":"reply","text":"Let me inspect it."}"""
+        assertTrue(runCatching { recovery.parse(Completion(multiple, "stop")) }.exceptionOrNull() is AgentResponseException)
+        assertNotNull(recovery.correction())
+        assertTrue(recovery.parse(Completion(action, "stop")) is AgentDecision.PrepareAction)
     }
 }

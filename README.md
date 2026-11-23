@@ -4,9 +4,14 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Update prepared: 0.4.29
+## Update prepared: 0.4.30
 
-The 0.4.29 APK is built and tested, but its GitHub attachment is still pending. The latest published GitHub APK is 0.4.28.
+- Research and document tasks can recover from malformed model responses at later steps, with bounded retries that preserve existing action receipts.
+- A response that reaches its output limit gets a larger allowance within the model's reported limits and guidance to write smaller content chunks. Incomplete or conflicting responses remain blocked.
+- Voice playback filters speaker echo with small recognition errors and waits briefly for a stable interruption. Explicit stop/correction words still interrupt immediately.
+- Exported chat reports record speech interruption reasons without recording audio. See [validation](qa/0.4.30/VALIDATION.md) for test coverage and limits.
+
+## Account features
 
 - **Use purchased credits** enables paid balances from credit accounts connected to your website login, including linked Core wallets.
 - **Automatic · connected accounts** follows your primary credit account and can choose another linked account that can cover a request. Select a specific account to pin its balance.
@@ -35,7 +40,7 @@ The phone owns conversation history, memory, task records, files, and permission
 
 ## Install or update
 
-1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download `KAI-Android-0.4.29.apk`.
+1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download the latest signed `KAI-Android-*.apk`, or install the newer APK supplied with the update.
 2. Open the APK on an **ARM64 Android 9 or newer** device. If Android asks, allow installation from the app you used to download it.
 3. Install over the existing **kai** app. Keep the existing installation to retain its encrypted local data.
 4. Open **Account** in the top bar, choose **Sign in / Create account**, and complete email or Google sign-in in your browser.

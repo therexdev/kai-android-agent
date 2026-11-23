@@ -72,4 +72,27 @@ class TurnLogicTest {
             assertFalse(Character.isHighSurrogate(chunk.text.last()))
         }
     }
+
+    @Test fun reportedEchoWithExpandedExampleAndTruncatedWordDoesNotInterrupt() {
+        val said = "What specific information should I include for each project (e.g., name, brief description, website, token symbol)?"
+        assertEquals("", SpeechEchoGuard.userTranscript("for example name brief descript", said))
+        assertFalse(SpeechEchoGuard.hasBargeInEvidence("for example name brief descript", said))
+        assertTrue(SpeechEchoGuard.isLikelyEcho("name brief description web site", said))
+        assertFalse(SpeechEchoGuard.isLikelyEcho("I would like as many different projects as you can find", said))
+    }
+
+    @Test fun transientPartialsNeedConfirmationButStopAndFinalSpeechAreImmediate() {
+        val gate = BargeInConfirmation()
+        val said = "I can find project names and descriptions."
+        assertFalse(gate.accept("please find websites", said, 1000))
+        assertFalse(gate.accept("please find websites", said, 1200))
+        assertTrue(gate.accept("please find websites too", said, 1400))
+        gate.clear()
+        assertTrue(gate.accept("stop", said, 1500))
+        assertTrue(gate.accept("please find websites", said, 1500, final = true))
+        assertTrue(gate.accept("yes", said, 1500, final = true))
+        assertFalse(gate.accept("project names and descriptions", said, 1600, final = true))
+        assertFalse(gate.accept("please find websites", said, 1800))
+        assertFalse(gate.accept("another unrelated fragment", said, 2200))
+    }
 }
