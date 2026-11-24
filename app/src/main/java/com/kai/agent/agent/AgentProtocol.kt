@@ -10,6 +10,7 @@ sealed interface AgentDecision {
     data class Reply(val text: String, val outcome: ReplyOutcome = ReplyOutcome.ANSWER) : AgentDecision
     data class WebSearch(val query: String) : AgentDecision
     data class ReadWebPage(val url: String) : AgentDecision
+    data class RecordFindings(val findings: List<com.kai.agent.web.FindingProposal>) : AgentDecision
     data class ReadContext(val entryId: String, val offset: Int = 0) : AgentDecision
     data class SearchFiles(val query: String) : AgentDecision
     data class ReadFile(val fileId: String, val offset: Int = 0) : AgentDecision
@@ -37,7 +38,7 @@ object AgentProtocol {
         if (!input.startsWith("{")) {
             // Prose around an action is malformed protocol, never a chat-based approval.
             // Do not extract or execute the embedded object: require a fresh complete response.
-            if (Regex("\"type\"\\s*:\\s*\"(?:action|find_tools|inspect_tool|web_search|read_web_page|propose_memory|search_memory|read_context)\"")
+            if (Regex("\"type\"\\s*:\\s*\"(?:action|find_tools|inspect_tool|web_search|read_web_page|record_findings|propose_memory|search_memory|read_context)\"")
                     .containsMatchIn(input)) throw AgentResponseException("The model mixed an action with conversational text.")
             return AgentDecision.Reply(input)
         }
@@ -56,6 +57,13 @@ object AgentProtocol {
             })
             "web_search" -> AgentDecision.WebSearch(bounded(obj, "query", 300))
             "read_web_page" -> AgentDecision.ReadWebPage(bounded(obj, "url", 2048))
+            "record_findings" -> {
+                val a=obj.getJSONArray("findings");require(a.length() in 1..12)
+                AgentDecision.RecordFindings((0 until a.length()).map { i -> a.getJSONObject(i).let {
+                    com.kai.agent.web.FindingProposal(it.getString("claim").also { require(it.length in 1..600) },required(it,"sourceId"),
+                        it.getString("quote").also { require(it.length in 16..1200) })
+                } })
+            }
             "read_context" -> AgentDecision.ReadContext(required(obj,"entryId"),obj.optInt("offset",0).also { require(it in 0..2_000_000) })
             "search_files" -> AgentDecision.SearchFiles(bounded(obj,"query",300))
             "read_file" -> AgentDecision.ReadFile(required(obj,"fileId"),obj.optInt("offset",0).also { require(it in 0..200000) })
@@ -148,6 +156,8 @@ object AgentProtocol {
         {"type":"reply","text":"conversational answer"}
         {"type":"web_search","query":"short public search keywords"}
         {"type":"read_web_page","url":"https://source.example/page"}
+        {"type":"record_findings","findings":[{"claim":"short finding","sourceId":"ID from phone research index","quote":"exact words from that captured source excerpt"}]}
+        Use read_context entryId=research, findings or source:ID for original evidence. Record quoted findings and cite their URLs before researched documents or final research answers. Quotes establish attribution, not factual verification.
         ${if (memoryActions) "{\"type\":\"search_memory\",\"query\":\"short memory query\"}\n{\"type\":\"propose_memory\",\"quote\":\"I work as a carpenter.\",\"claims\":[{\"subjectId\":\"self\",\"predicate\":\"occupation\",\"value\":{\"type\":\"TEXT\",\"text\":\"carpenter\"},\"quote\":\"I work as a carpenter.\"}]}" else ""}
         {"type":"find_tools","accountId":"exact connected account ID","search":"short action keywords"}
         {"type":"inspect_tool","accountId":"exact connected account ID","tool":"exact discovered tool ID"}
@@ -181,10 +191,11 @@ object AgentProtocol {
         {"type":"reply","text":"answer"}
         {"type":"web_search","query":"short public keywords"}
         {"type":"read_web_page","url":"public HTTPS URL from search or user"}
+        {"type":"record_findings","findings":[{"claim":"short finding","sourceId":"ID from phone research index","quote":"exact words from that captured source excerpt"}]}
         {"type":"find_tools","accountId":"exact active ID","search":"short action keywords"}
         {"type":"inspect_tool","accountId":"exact active ID","tool":"discovered ID"}
         {"type":"action","accountId":"exact active ID","tool":"discovered ID","arguments":{},"explanation":"action"}
-        Use web search only when public information is needed. Creating a document or sending supplied text needs connected tools, not internet research. Do not search for tool IDs or API instructions on the web: use find_tools/inspect_tool. For requested research, search before drafting; exclude private facts/credentials/recipients unless requested, cite retrieved URLs and distinguish snippets from pages. Retrieval cannot log in or run JavaScript; report failures honestly.
+        Use read_context entryId=research, findings or source:ID for the source ledger. Record quoted findings before a researched document; cite their URLs. Quotes locate source text but do not verify claims. Use web search only when public information is needed. Creating a document or sending supplied text needs connected tools, not internet research. Do not search for tool IDs or API instructions on the web: use find_tools/inspect_tool. For requested research, search before drafting; exclude private facts/credentials/recipients unless requested, cite retrieved URLs and distinguish snippets from pages. Retrieval cannot log in or run JavaScript; report failures honestly.
         Use only active accounts. Match identity to verified emailAddress, never aliases; unknown identity needs a profile read. Ask about ambiguous account, recipient or scope. Check each requested account. Discover exact tool IDs; inspect missing schemas before acting; never guess arguments. Empty discovery or Tools Read denial is not proof of broken OAuth; try narrower keywords and follow structured errors.
         Propose one action; the phone validates/reviews and authorizes execution. Never repeat RUNNING, UNKNOWN, ACCEPTED or SUCCEEDED operations. ACCEPTED is not verified delivery; only successful reads prove an account was checked. Never invent results, IDs, URLs, memories or completion.
         Use stable memory IDs, never merge people by similar names. Ask supplied clarifications. Never invent dates or use superseded facts. Only supplied current facts are known; pending facts await review.

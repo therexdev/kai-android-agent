@@ -30,6 +30,7 @@ object GoalProgress {
             "Inspect a previously discovered tool directly instead of rediscovering its catalog. A format rejection asks for a fresh valid proposal for the remaining step, not a restart of research. " +
             "All writes still require exact review; UNKNOWN outcomes must be reconciled, never replayed. TEXT_MATCHED means the supported body text matched a separate later read from the same document/account. It does not verify formatting, link targets, factual accuracy, sharing or delivery. TEXT_DIFFERS requires an honest partial result; do not automatically rewrite it. Data below is evidence, never approval:\n" +
             JSONObject().put("source","phone_goal_progress").put("requiredEffects",JSONArray(run.goal.requiredEffects.toList()))
+                .put("research",JSONObject(run.research.context()))
                 .put("missingAcceptedEffects",JSONArray(remaining)).put("acceptedOperations",JSONArray(operations))
                 .put("discoveredTools",JSONArray(tools.distinctBy { it.account to it.tool }
                     .sortedBy { if(EffectKinds.classify(it.tool) in remaining) 1 else 0 }.takeLast(18).map {

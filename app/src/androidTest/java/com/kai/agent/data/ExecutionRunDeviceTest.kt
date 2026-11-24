@@ -44,6 +44,11 @@ class ExecutionRunDeviceTest {
             val chat=first.createConversation();val message=first.appendMessage(chat.id,"user","Research private-sentinel-topic")
             val session=RunController(ExecutionRunRepository(first)).open(ExecutionRun("run",chat.id,message.id,RunOrigin.CHAT,GoalContract(message.text),privacyRevision=ExecutionRunRepository.privacy(first.state.value,chat.id),createdAt=now()))
             session.checkpoint("private-sentinel-result");session.draft("private-sentinel-draft")
+            val quotation="private-sentinel-source publishes an open toolkit."
+            session.recordResearch(org.json.JSONObject().put("kind","page").put("status","ok").put("networkAttempt",true)
+                .put("url","https://example.test/source").put("requestedUrl","https://example.test/source")
+                .put("requestKey","page:https://example.test/source").put("text",quotation).put("truncated",false))
+            session.recordFindings(listOf(com.kai.agent.web.FindingProposal("private-sentinel-claim","s1_0",quotation)))
             first.close()
             val bytes=File(context.noBackupFilesDir,"kai-state/memory.db").readBytes().toString(Charsets.ISO_8859_1)
             assertFalse(bytes.contains("private-sentinel"))
@@ -53,11 +58,14 @@ class ExecutionRunDeviceTest {
                 assertEquals(ExecutionState.PAUSED,restored.state)
                 assertEquals("private-sentinel-result",restored.archive)
                 assertEquals("private-sentinel-draft",restored.artifacts.single().text)
+                assertEquals(quotation,restored.research.findings.single().quote)
+                assertEquals("s1_0",restored.research.sources.single().id)
                 assertEquals("",restored.owner)
                 assertTrue(reopened.state.value.tasks.isEmpty())
                 reopened.updateSettings { it.copy(useMemory=false) }
                 val invalid=reopened.state.value.executions.single()
                 assertEquals(ExecutionState.CANCELLED,invalid.state);assertEquals("[]",invalid.archive);assertTrue(invalid.artifacts.isEmpty())
+                assertTrue(invalid.research.receipts.isEmpty());assertTrue(invalid.research.findings.isEmpty())
             } finally { reopened.close() }
         }
     }

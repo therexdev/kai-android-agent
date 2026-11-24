@@ -65,6 +65,32 @@ class RunController(private val repository: RunRepository, private val clock: ()
                 }
             }
         }
+        suspend fun recordResearch(result: org.json.JSONObject): String {
+            check()
+            if(result.opt("networkAttempt")==true && !result.optBoolean("cached"))
+                mutate { it.copy(research=it.research.append(result,clock())).event("source_recorded",clock()) }
+            return record.research.context()
+        }
+        suspend fun recordFindings(proposals: List<com.kai.agent.web.FindingProposal>): String {
+            check()
+            return try {
+                mutate { it.copy(research=it.research.record(proposals,clock())).event("findings_recorded",clock()) }
+                org.json.JSONObject().put("status","RECORDED").put("evidence",org.json.JSONObject(record.research.context())).toString()
+            } catch(e: com.kai.agent.web.ResearchInputException) {
+                org.json.JSONObject().put("status","REJECTED").put("message",e.message).put("notice",com.kai.agent.web.ResearchEvidence.NOTICE).toString()
+            }
+        }
+        /** At most two model corrections, persisted across worker/approval resumes. */
+        suspend fun reviewResearch(text: String, requireAttribution: Boolean, additionalUrls: Set<String>): String? {
+            check()
+            val problem=record.research.review(text,requireAttribution,additionalUrls) ?: return null
+            if(record.research.corrections>=2) {
+                finish(ExecutionState.PARTIAL,"Research source attribution still needs review. The draft and findings are saved; no new action was prepared.")
+                return problem
+            }
+            mutate { it.copy(research=it.research.copy(corrections=it.research.corrections+1)).event("research_review",clock()) }
+            return "Phone research check: $problem This rejects only the new proposal. Preserve existing receipts; do not recreate or replay earlier writes."
+        }
         suspend fun switchModel(route: String, protocol: String, archive: String) {
             mutate { it.copy(modelRoute=route,protocol=protocol,archive=archive).event("model_changed",clock()) }
         }

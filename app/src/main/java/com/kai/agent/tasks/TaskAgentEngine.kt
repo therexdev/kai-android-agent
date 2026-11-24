@@ -204,7 +204,9 @@ class TaskAgentEngine(
                 trace?.record("saved_step",JSONObject().put("runId",id).put("stepId",step.id).put("turn",step.turns))
                 val web=com.kai.agent.web.WebResearchSession(run.goal,
                     braveKey=store.state.value.settings.braveSearchApiKey, smallContext=smallContext,
-                    prior=requireNotNull(runtime).record.observations.flatMap { listOf(InferenceMessage("assistant","Earlier phone observation"),InferenceMessage("user",it.content)) })
+                    prior=requireNotNull(runtime).record.observations.flatMap { listOf(InferenceMessage("assistant","Earlier phone observation"),InferenceMessage("user",it.content)) },
+                    trustedResults=record.research.receipts.map { it.result },onResult={ recordResearch(it) })
+                fun researchUrls() = com.kai.agent.web.ResearchEvidence.urls(run.goal)+store.state.value.tasks.filter { it.intent?.executionId==record.id }.flatMap { it.receipts }.map { it.url }.filter(String::isNotBlank)
                 val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) },webAvailable=!web.exhausted)
                 val nativeConfig=baseConfig
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
@@ -283,11 +285,20 @@ class TaskAgentEngine(
                     return@drive
                 }
                 when(decision) {
-                    is AgentDecision.ReadContext -> append(completion.text,if(decision.entryId=="observations" || decision.entryId.startsWith("obs:")) RuntimeObservations.read(requireNotNull(runtime).record,decision.entryId,decision.offset) else TaskContextArchive.read(turnContext,decision.entryId,decision.offset,store.state.value.tasks,run.conversationId,boundary,store.state.value.settings.composioUserId,store.state.value.settings.connectionGeneration,current()))
+                    is AgentDecision.RecordFindings -> append(completion.text,recordFindings(decision.findings))
+                    is AgentDecision.ReadContext -> append(completion.text,record.research.read(decision.entryId,decision.offset) ?: if(decision.entryId=="observations" || decision.entryId.startsWith("obs:")) RuntimeObservations.read(requireNotNull(runtime).record,decision.entryId,decision.offset) else TaskContextArchive.read(turnContext,decision.entryId,decision.offset,store.state.value.tasks,run.conversationId,boundary,store.state.value.settings.composioUserId,store.state.value.settings.connectionGeneration,current()))
                     is AgentDecision.SearchFiles, is AgentDecision.ReadFile -> append(completion.text,com.kai.agent.projects.FileRetrieval.execute(store.state.value,run.projectId,run.conversationId,decision))
                     is AgentDecision.SearchMemory, is AgentDecision.ProposeMemory -> run { hold(RunStatus.BLOCKED,"Open a conversation to look up or save personal memories."); return@drive }
                     is AgentDecision.WebSearch, is AgentDecision.ReadWebPage -> append(completion.text,web.execute(decision))
                     is AgentDecision.Reply -> {
+                        if(step.id==run.steps.lastOrNull()?.id && com.kai.agent.web.WebResearchSession.explicitResearch(run.goal) && decision.outcome==ReplyOutcome.ANSWER && record.goal.kind=="answer") {
+                            draft(decision.text,web.sourceUrls)
+                            reviewResearch(decision.text,true,researchUrls())?.let { problem ->
+                                if(record.state!=ExecutionState.RUNNING) hold(RunStatus.BLOCKED,record.detail)
+                                else append(AgentResponseRecovery.REJECTED,problem)
+                                return@drive
+                            }
+                        }
                         if(step.id==run.steps.lastOrNull()?.id && decision.outcome!=ReplyOutcome.QUESTION && sheetCorrections<2) {
                             SpreadsheetEvidence.correction(GoalVerifier.acceptedTasks(store.state.value.tasks,run.conversationId,run.createdAt,requireNotNull(runtime).record),run.goal)?.let { correction ->
                                 sheetCorrections++;append(AgentResponseRecovery.REJECTED,correction);return@drive
@@ -332,6 +343,14 @@ class TaskAgentEngine(
                         check()
                         EffectGuard.validate(store.state.value.tasks,run.conversationId,run.createdAt,decision.accountId,tool,decision.arguments)
                         DraftContent.extract(decision.arguments)?.let { draft(it,web.sourceUrls) }
+                        if(!tool.readOnly && tool.toolkit=="googledocs" && com.kai.agent.web.WebResearchSession.explicitResearch(run.goal)) {
+                            val body=DraftContent.extract(decision.arguments)
+                            if(body!=null) reviewResearch(body,true,researchUrls())?.let { problem ->
+                                if(record.state!=ExecutionState.RUNNING) hold(RunStatus.BLOCKED,record.detail)
+                                else append(AgentResponseRecovery.REJECTED,problem)
+                                return@drive
+                            }
+                        }
                         store.prepareRunAction(id,token,ActionIntent(toolName=tool.id,accountId=ref.accountId,
                             argumentsJson=decision.arguments.toString(),connectionGeneration=toolRouter.generation(ref.accountId),transportId=toolRouter.transport(ref.accountId),readOnly=tool.readOnly,executionId=requireNotNull(runtime).record.id,effectKind=EffectKinds.classify(tool),
                             ownerId=settings.composioUserId,toolVersion=tool.version,toolSchemaJson=tool.schemaJson),tool.name,completion.text,tool.readOnly,completion.toolCalls,completion.providerReplay)

@@ -409,7 +409,7 @@ class KaiViewModel(
                         }) })
             },
             tasks = state.tasks.filter { it.runId.isBlank() }.sortedByDescending { it.updatedAt }.map { KaiTask(it.id, it.title, it.events.lastOrNull()?.detail.orEmpty().ifBlank { it.instructions }, it.status.toUi(), resultUrl = it.receipts.lastOrNull()?.url.orEmpty(), receiptId = it.receipts.lastOrNull()?.providerId.orEmpty()) },
-            pendingApproval = pending?.let { task -> KaiApproval(task.id, task.title, "Review this exact action. Changing instructions cancels this proposal.", "Approve action", accountLabel(task.intent?.accountId.orEmpty()), task.intent?.toolName.orEmpty(), pretty(task.intent?.argumentsJson ?: "{}"),runId=task.runId,reviewKey=task.intent?.let { TaskRules.fingerprint(it) }.orEmpty()) },
+            pendingApproval = pending?.let { task -> KaiApproval(task.id, task.title, "Review this exact action. Changing instructions cancels this proposal."+state.executions.firstOrNull { it.id==task.intent?.executionId }?.research?.reviewSummary()?.takeIf { it.isNotBlank() }?.let { "\n\n"+it }.orEmpty(), "Approve action", accountLabel(task.intent?.accountId.orEmpty()), task.intent?.toolName.orEmpty(), pretty(task.intent?.argumentsJson ?: "{}"),runId=task.runId,reviewKey=task.intent?.let { TaskRules.fingerprint(it) }.orEmpty()) },
             connectionsSignedIn = state.settings.composioApiKey.isNotBlank(),
             composioKeySaved = state.settings.composioApiKey.isNotBlank(),
             braveSearchKeySaved = state.settings.braveSearchApiKey.isNotBlank(),
@@ -429,7 +429,7 @@ class KaiViewModel(
             runActions = state.tasks.filter { it.runId.isNotBlank() }.groupBy { it.runId }.mapValues { (_,tasks) -> tasks.map {
                 KaiTask(it.id,it.title,it.events.lastOrNull()?.detail.orEmpty(),it.status.toUi(),it.receipts.lastOrNull()?.url.orEmpty(),it.receipts.lastOrNull()?.providerId.orEmpty()) } },
             runApprovals = state.tasks.filter { it.runId.isNotBlank() && ApprovalPresentation.requiresReview(it) }.map { task ->
-                KaiApproval(task.id,task.title,"Review the exact action for this saved task.","Approve action",
+                KaiApproval(task.id,task.title,"Review the exact action for this saved task."+state.executions.firstOrNull { it.id==task.intent?.executionId }?.research?.reviewSummary()?.takeIf { it.isNotBlank() }?.let { "\n\n"+it }.orEmpty(),"Approve action",
                     accountLabel(task.intent?.accountId.orEmpty()),task.intent?.toolName.orEmpty(),pretty(task.intent?.argumentsJson ?: "{}"),runId=task.runId,reviewKey=task.intent?.let { TaskRules.fingerprint(it) }.orEmpty()) }
 
         ) }
@@ -688,7 +688,9 @@ class KaiViewModel(
         }
         val web = com.kai.agent.web.WebResearchSession(userText,
             braveKey=state.settings.braveSearchApiKey, smallContext=smallContext,
-            requireFreshResearch=continuation == null, prior=priorResults)
+            requireFreshResearch=continuation == null, prior=priorResults,
+            trustedResults=runtime.record.research.receipts.map { it.result },onResult={ runtime.recordResearch(it) })
+        fun researchUrls() = com.kai.agent.web.ResearchEvidence.urls(userText)+store.state.value.tasks.filter { it.intent?.executionId==runtime.record.id }.flatMap { it.receipts }.map { it.url }.filter(String::isNotBlank)
 
         val inferenceRecovery=InferenceRecovery()
         val modelPolicy=ModelPolicy(creditOverview?.models.orEmpty().filter { it.available && (!state.settings.creditAccount.freeOnly || it.freeEligible) }
@@ -850,7 +852,8 @@ class KaiViewModel(
                     return@drive
                 }
                 when (decision) {
-                    is AgentDecision.ReadContext -> appendContext(completion.text,com.kai.agent.agent.TaskContextArchive.read(context,decision.entryId,decision.offset,store.state.value.tasks,cid,forgottenBoundary,state.settings.composioUserId,state.settings.connectionGeneration))
+                    is AgentDecision.RecordFindings -> appendContext(completion.text,runtime.recordFindings(decision.findings))
+                    is AgentDecision.ReadContext -> appendContext(completion.text,runtime.record.research.read(decision.entryId,decision.offset) ?: com.kai.agent.agent.TaskContextArchive.read(context,decision.entryId,decision.offset,store.state.value.tasks,cid,forgottenBoundary,state.settings.composioUserId,state.settings.connectionGeneration))
                     is AgentDecision.SearchFiles, is AgentDecision.ReadFile -> appendContext(completion.text,com.kai.agent.projects.FileRetrieval.execute(store.state.value,currentConversation.projectId,cid,decision))
                     is AgentDecision.SearchMemory -> {
                         val current = store.state.value
@@ -880,6 +883,18 @@ class KaiViewModel(
                         appendContext(completion.text, result)
                     }
                     is AgentDecision.Reply -> {
+                        if(com.kai.agent.web.WebResearchSession.explicitResearch(userText) && decision.outcome==com.kai.agent.agent.ReplyOutcome.ANSWER && runtime.record.goal.kind=="answer") {
+                            runtime.draft(decision.text,web.sourceUrls)
+                            val problem=if(answerOnly) runtime.record.research.review(decision.text,false,researchUrls())
+                                else runtime.reviewResearch(decision.text,true,researchUrls())
+                            if(problem!=null) {
+                                if(answerOnly || runtime.record.state!=ExecutionState.RUNNING) {
+                                    if(runtime.record.state==ExecutionState.RUNNING) runtime.finish(ExecutionState.PARTIAL,"Research citations need review.")
+                                    reply(cid,web.withSources("The research draft needs source review. Saved findings remain available."),epoch);replyCommitted=true
+                                } else appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED,problem)
+                                return@drive
+                            }
+                        }
                         val effectEvidence=GoalVerifier.acceptedEffect(store.state.value.tasks,cid,record.createdAt,runtime.record)
                         val resultLinks=if(record.goal.kind=="document") ResultLinks.documents(store.state.value.tasks,cid,record.createdAt,runtime.record) else emptyList()
                         val accepted=effectEvidence && (record.goal.kind!="document" || contentGuard.hasAcceptedBody(store.state.value.tasks) && resultLinks.isNotEmpty())
@@ -936,6 +951,14 @@ class KaiViewModel(
                         runtime.check()
                         EffectGuard.validate(store.state.value.tasks,cid,record.createdAt,decision.accountId,tool,decision.arguments)
                         DraftContent.extract(decision.arguments)?.let { runtime.draft(it,web.sourceUrls) }
+                        if(!tool.readOnly && tool.toolkit=="googledocs" && com.kai.agent.web.WebResearchSession.explicitResearch(userText)) {
+                            val body=DraftContent.extract(decision.arguments)
+                            if(body!=null) runtime.reviewResearch(body,true,researchUrls())?.let { problem ->
+                                if(runtime.record.state!=ExecutionState.RUNNING) { reply(cid,runtime.record.detail,epoch);replyCommitted=true }
+                                else appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED,problem)
+                                return@drive
+                            }
+                        }
                         val task = prepareAction(decision, tool, userText, cid, targetEvidence,runtime.record.id)
                         if(!tool.readOnly) context.awaiting(completion)
                         if(!tool.readOnly) store.saveActionCheckpoint(task.id, context.checkpoint(), WorkspaceRules.contextRevision(state,currentConversation.projectId,cid),context.archive())

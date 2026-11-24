@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Saved source attribution (0.5.5)
+
+KAI-028/032 now retain phone-produced retrieval receipts, run-local source IDs and exact-quote findings separately from model text. Chat and saved tasks share encrypted persistence, paged source retrieval, trusted cache restoration and bounded citation correction. Source snippets, page excerpts and navigation links stay distinct. New Google Docs research bodies and final plain research answers require a current quoted finding and a cited source URL; exact write approval still applies.
+
+This is a minimal attribution floor, not semantic verification or complete coverage. Other service bodies, per-claim coverage, independent corroboration and freshness remain unfinished. Both roadmap items stay partial. Older archives are retained without being promoted to trusted receipts. See `docs/RESEARCH-EVIDENCE.md` and `qa/0.5.5/VALIDATION.md` for boundaries and measured checks.
+
 ## Shared inference allowances and field regressions (0.5.4)
 
 KAI-016/018 now share durable model admission across chat and saved-task planning, summaries, retries/fallbacks and finalization. Request/input/output/active-model-time counters and optional catalog-estimated credits survive interruption and worker restarts. Missing usage retains reservations; only explicit continuation grants more allowance. Existing approved effects settle before new model admission, with UNKNOWN outcomes still unreplayed. Background memory, complete tool/network wall-clock accounting and authoritative billing settlement remain unfinished; both roadmap items stay partial.

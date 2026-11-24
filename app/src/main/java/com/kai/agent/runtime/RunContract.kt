@@ -50,6 +50,7 @@ data class ExecutionRun(
     val archive: String = "[]", val modelRoute: String = "", val protocol: String = "",
     val tools: List<ToolReference> = emptyList(), val artifacts: List<RunArtifact> = emptyList(), val observations: List<RunObservation> = emptyList(), val budget: RunBudget = RunBudget(),
     val detail: String = "", val failure: FailureCode? = null, val events: List<RunEvent> = emptyList(),
+    val research: com.kai.agent.web.ResearchEvidence = com.kai.agent.web.ResearchEvidence(),
 ) {
     val resumable get() = state in setOf(ExecutionState.PAUSED, ExecutionState.PARTIAL, ExecutionState.FAILED, ExecutionState.WAITING_INPUT)
     fun event(kind: String, now: Long, code: String = "") = copy(events=(events+RunEvent((events.lastOrNull()?.sequence ?: 0)+1,now,kind,code)).takeLast(200))

@@ -4,19 +4,18 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.4
+## Test release: 0.5.5
 
-The signed 0.5.4 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.5 test APK is distributed directly. The latest published release remains available above.
 
-- Counts model requests, planning, summaries, retries and finalization against one persisted run allowance. Interrupted requests retain uncertain usage; automatic resumes do not replenish the allowance.
-- Adds an optional estimated-credit allowance in Account and shows request/time/cost accounting in the run panel. Catalog estimates are not settled billing or a guaranteed charge cap.
-- Rejects empty Gmail messages and obvious placeholder draft IDs before review or dispatch, with bounded model correction and fresh exact approval.
-- Recognizes the Google Docs horizontal-rule rendering at the corresponding approved Markdown position, preserving full body comparison and same-document receipt checks.
-- Lets already approved saved-task actions settle after model exhaustion, without admitting more inference or replaying UNKNOWN writes.
+- Saves public web receipts and quoted findings in the encrypted run, with separate labels for search snippets, page excerpts and unread navigation links.
+- Restores evidence and failed-read caches after interruption; original source excerpts remain available through context retrieval and the progress panel shows quoted findings.
+- Checks new researched Google Docs bodies and final plain research answers for sourced links and a quoted finding, with two persisted correction opportunities before a partial outcome.
+- Preserves exact write approval, uncertain-outcome protection, shared inference allowances and document read-back checks from earlier updates.
 
-See [run allowances](docs/RUN-ALLOWANCES.md), [document verification](docs/DOCUMENT-VERIFICATION.md), [validation](qa/0.5.4/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
+Quote matching establishes attribution only. Full claim coverage and factual verification remain unfinished. See [research evidence](docs/RESEARCH-EVIDENCE.md), [run allowances](docs/RUN-ALLOWANCES.md), [validation](qa/0.5.5/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. The supplied 0.5.3 phone report is regression evidence; a physical 0.5.4 test remains a separate gate.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. A physical 0.5.5 test remains a separate gate.
 
 ## Account features
 
