@@ -1,0 +1,48 @@
+{
+  "version": "0.5.1",
+  "versionCode": 41,
+  "package": "com.kai.agent.preview",
+  "apk": "KAI-Android-0.5.1.apk",
+  "bytes": 125636555,
+  "sha256": "9a8da74cbf5fc858be093a1d84ce1ff4d27354064e4215ab4bec8918afe6030f",
+  "certificateSha256": "a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89",
+  "abis": [
+    "arm64-v8a"
+  ],
+  "alignment16KBVerified": true,
+  "fullJvmRun": {
+    "totals": {
+      "tests": 550,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "failures": [
+      {
+        "class": "com.kai.agent.agent.AgentFlowTest",
+        "test": "discoveryProposalReviewExecutionAndReceiptRemainSeparateSteps",
+        "failureType": "org.junit.runners.model.TestTimedOutException"
+      }
+    ]
+  },
+  "flowRetry": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "finalTargetedJvm": {
+    "tests": 38,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintErrors": 0,
+  "lintWarnings": 6,
+  "sourceInputs": 707,
+  "sourceDrift": 0,
+  "deviceInstrumentationVerified": false,
+  "liveConnectedServicesVerified": false,
+  "nativeGatewayActivationVerified": false,
+  "githubBinaryReleasePublished": false
+}

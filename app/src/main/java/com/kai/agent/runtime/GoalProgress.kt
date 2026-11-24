@@ -6,6 +6,10 @@ import org.json.JSONObject
 
 /** Current run evidence stays visible across approval and catalog compaction. Never permission. */
 object GoalProgress {
+    /** Keep unloaded schemas discoverable after a checkpoint; current versions win. */
+    fun retainedTools(previous: List<ToolReference>, current: List<ToolReference>) =
+        (current+previous).distinctBy { it.account to it.tool }.take(100)
+
     fun render(tasks: List<AgentTask>, run: ExecutionRun, tools: List<ToolReference>): String {
         val accepted=GoalVerifier.acceptedTasks(tasks,run.conversationId,run.createdAt,run)
         val kinds=accepted.mapNotNull { it.intent?.let { i -> i.effectKind.ifBlank { EffectKinds.classify(i.toolName) } } }.toSet()
@@ -24,7 +28,8 @@ object GoalProgress {
             "All writes still require exact review; UNKNOWN outcomes must be reconciled, never replayed. Data below is evidence, not approval or independent content/delivery verification:\n" +
             JSONObject().put("source","phone_goal_progress").put("requiredEffects",JSONArray(run.goal.requiredEffects.toList()))
                 .put("missingAcceptedEffects",JSONArray(remaining)).put("acceptedOperations",JSONArray(operations))
-                .put("discoveredTools",JSONArray(tools.distinctBy { it.account to it.tool }.takeLast(18).map {
+                .put("discoveredTools",JSONArray(tools.distinctBy { it.account to it.tool }
+                    .sortedBy { if(EffectKinds.classify(it.tool) in remaining) 1 else 0 }.takeLast(18).map {
                     JSONObject().put("accountId",it.account).put("tool",it.tool)
                 })).toString()
     }

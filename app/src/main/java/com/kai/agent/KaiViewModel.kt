@@ -675,8 +675,10 @@ class KaiViewModel(
         val contextManager=com.kai.agent.agent.AgentContextManager()
         suspend fun saveProgress() {
             ensureActiveTurn(epoch)
-            runtime.checkpoint(context.archive(), snapshot?.accounts.orEmpty().filter { it.active }.flatMap { a ->
-                knownTools.values.filter { knownTools[toolKey(a.id,it.id)]==it }.map { ToolReference(a.id,it.id,it.version) } })
+            val activeAccounts=snapshot?.accounts.orEmpty().filter { it.active }.map { it.id }.toSet()
+            val loaded=activeAccounts.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account,it.id)]==it }
+                .map { ToolReference(account,it.id,it.version) } }
+            runtime.checkpoint(context.archive(),GoalProgress.retainedTools(runtime.record.tools.filter { it.account in activeAccounts },loaded))
         }
         suspend fun appendContext(assistant: String, runtime: String, compact: String = runtime) {
             trace?.record("runtime_result",JSONObject().put("modelProposal",assistant).put("result",runtime).put("compactResult",compact))

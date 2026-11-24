@@ -43,4 +43,16 @@ class GoalProgressTest {
         for(level in 0..3) assertTrue(context.project(level).any { it.content.contains("phone_goal_progress") && it.content.contains("EMAIL") })
         assertEquals(archive,context.archive())
     }
+    @Test fun unloadedEmailSchemaSurvivesCheckpointsAndRemainsVisibleAmongUnrelatedTools() {
+        val mail=ToolReference("mail-account","GMAIL_SEND_EMAIL","v1")
+        val oldDoc=ToolReference("docs-account","GOOGLEDOCS_CREATE_DOCUMENT","v1")
+        val newDoc=oldDoc.copy(version="v2")
+        val catalog=(1..40).map { ToolReference("sheets-account","GOOGLESHEETS_GET_$it","v1") }
+        val retained=GoalProgress.retainedTools(catalog+mail+oldDoc,listOf(newDoc))
+        assertTrue(mail in retained);assertTrue(newDoc in retained);assertFalse(oldDoc in retained)
+        val again=GoalProgress.retainedTools(retained,listOf(newDoc))
+        val visible=data(GoalProgress.render(listOf(doc),run,again)).getJSONArray("discoveredTools")
+        assertTrue((0 until visible.length()).any { visible.getJSONObject(it).getString("tool")==mail.tool })
+        assertEquals(42,again.size)
+    }
 }

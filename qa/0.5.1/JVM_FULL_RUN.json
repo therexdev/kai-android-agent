@@ -1,0 +1,15 @@
+{
+  "totals": {
+    "tests": 550,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "failures": [
+    {
+      "class": "com.kai.agent.agent.AgentFlowTest",
+      "test": "discoveryProposalReviewExecutionAndReceiptRemainSeparateSteps",
+      "failureType": "org.junit.runners.model.TestTimedOutException"
+    }
+  ]
+}

@@ -6,7 +6,7 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 ## Test release: 0.5.1
 
-**[Download the 0.5.1 test APK](https://github.com/therexdev/kai-android-agent/releases/download/v0.5.1-alpha.1/KAI-Android-0.5.1.apk)**
+The signed 0.5.1 test APK is distributed directly while its GitHub release upload is pending. The latest published release remains available above.
 
 - Fixes transient approval dialogs for trusted read-only operations and keeps real write reviews stable during account-label refresh.
 - Moves Report to the very bottom of Settings.
