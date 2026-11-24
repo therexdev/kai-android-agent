@@ -5,6 +5,16 @@ import com.kai.agent.agent.ReplyOutcome
 
 /** Model outcome labels are proposals. Completion still requires host-owned effect evidence. */
 object GoalVerifier {
+    /** An unfinished effect is not an ordinary answer. This checks the existing outcome contract,
+     * not the wording of a question, and never constructs or authorizes an action. */
+    fun validateReply(decision: AgentDecision, actionOutstanding: Boolean) {
+        if(actionOutstanding && decision is AgentDecision.Reply && decision.outcome==ReplyOutcome.ANSWER)
+            throw com.kai.agent.agent.AgentResponseException("The requested action needs a concrete proposal, a missing-input question, or an explicit incomplete outcome.",actionOutstanding=true)
+    }
+    /** Nonfinal research/planning steps may finish with text; the final step owes the whole goal. */
+    fun stepGoal(run: ExecutionRun, instructions: String, finalStep: Boolean) =
+        if(finalStep) run.goal else GoalContract.infer(instructions)
+
     private fun unfinished(text: String)=Regex("(?i)\\b(?:can['’]t|cannot|unable to|couldn['’]t|haven['’]t|have not|not yet)\\b.{0,100}\\b(?:populate|fill|write|written|add|added|finish|complete|update|updated|send|sent)\\b").containsMatchIn(text)
     fun outcome(reply: AgentDecision.Reply, externalGoal: Boolean, hasAcceptedWrite: Boolean): ExecutionState = when(reply.outcome) {
         ReplyOutcome.QUESTION -> ExecutionState.WAITING_INPUT

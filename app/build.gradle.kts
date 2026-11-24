@@ -12,8 +12,8 @@ android {
         applicationId = "com.kai.agent.preview"
         minSdk = 28
         targetSdk = 36
-        versionCode = 47
-        versionName = "0.5.7"
+        versionCode = 48
+        versionName = "0.5.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         providers.gradleProperty("kaiTargetAbi").orNull?.let { target ->
             require(target in setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")) { "Unsupported target ABI" }

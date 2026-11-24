@@ -1,0 +1,33 @@
+{
+  "sources": [
+    "User-provided 0.5.7 failure report",
+    "User-provided 0.5.2 successful document proposal"
+  ],
+  "result": "PASS",
+  "assertions": {
+    "result": "PASS",
+    "originalGoalRequiresEffect": true,
+    "reconstructedRegistryOffersDocumentCreate": true,
+    "latestReportResponseRejectedInBothProtocols": true,
+    "existingCorrectionPreservesReviewAndMissingInputContract": true,
+    "liveCalls": 0,
+    "reconstructedRegistryToolCount": 16,
+    "previousSuccessfulDocumentArgumentsPreservedInBothProtocols": true,
+    "previousSuccessfulArgumentsPassCurrentSchema": true
+  },
+  "limitations": [
+    "Offline compiled-class replay; no new model execution",
+    "Old response arguments are reused only for validation, never submitted",
+    "Does not establish causal prompt/provider attribution or live Android completion"
+  ],
+  "live_calls_made": 0,
+  "source_sha256": {
+    "agent/AgentProtocol.kt": "030b9d3ca34c63487cd262588818d9f16febacf32530b4164e0b5b330b663abd",
+    "agent/AgentHarness.kt": "3e6e4d8235de03d5a749ff1bd255c035e7335e3fb4fa4ec9854525ab3c1da678",
+    "agent/AgentResponseRecovery.kt": "6c302ba17cfc7d29d985b0f037125a2263c84c4376768c6062be617979e80c73",
+    "runtime/GoalVerifier.kt": "86741975b362ab6fe6386bbfad2e54b9836a00aa2647a44a42a0a7c53228b919",
+    "runtime/GoalProgress.kt": "b6206cb2bcdd839fa5da541929e18ef0a009056106a1e7d3ac857758693917a9",
+    "KaiViewModel.kt": "4e9812da5787ad3210f751f38d230584de15096d1a1b60620c0ff06527bc4562",
+    "tasks/TaskAgentEngine.kt": "44994a177580e547ff93f1aa391059e06a338405b6386b5c045fec4e989ea5e8"
+  }
+}

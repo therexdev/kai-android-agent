@@ -41,6 +41,8 @@ class KaiViewModel(
     application: Application,
     private val connections: DirectComposioClient,
     voiceFactory: VoiceEngineFactory = VoiceEngineFactory { context, callbacks -> VoiceController(context, callbacks) },
+    private val inference: InferenceClient = InferenceClient(),
+    private val creditClient: com.kai.agent.account.CreditAccountClient = com.kai.agent.account.CreditAccountClient(),
 ) : AndroidViewModel(application), KaiUiActions {
     constructor(application: Application) : this(application, DirectComposioClient())
     private val storeLease = KaiStores.acquire(application)
@@ -48,12 +50,10 @@ class KaiViewModel(
     private val scheduler = com.kai.agent.tasks.TaskScheduler(application)
     private val documentImporter = com.kai.agent.projects.DocumentImporter(application)
     private var selectedDocuments = emptySet<String>()
-    private val inference = InferenceClient()
     private val toolRouter=ToolRouter({store.state.value.settings},connections)
     private val runRepository = ExecutionRunRepository(store)
     private val runController = RunController(runRepository)
     private var activeChatExecutionId: String? = null
-    private val creditClient = com.kai.agent.account.CreditAccountClient()
     private var creditJob: Job? = null
     private var creditEpoch = 0L
     private var creditOverview: com.kai.agent.account.AccountOverview? = null
@@ -794,13 +794,15 @@ class KaiViewModel(
                 publishPreview(forceDisplay = true)
                 ensureActiveTurn(epoch)
                 mutableUi.update { it.copy(providerConnected = true, providerStatus = completion.status(config)) }; accountRefresh()
-                val decision = try { harness.parse(completion,responseRecovery) }
+                val acceptedForReply=GoalVerifier.acceptedEffect(store.state.value.tasks,cid,record.createdAt,runtime.record) &&
+                    (!contentGuard.active || contentGuard.hasAcceptedBody(store.state.value.tasks))
+                val decision = try { harness.parse(completion,responseRecovery,actionOutstanding=!answerOnly && record.goal.requiresEffect && !acceptedForReply) }
                 catch (error: com.kai.agent.agent.AgentResponseException) {
                     // Once speech began, a different response must not replace what the user heard.
                     trace?.error("proposal_rejected",error)
-                    val correction = if (speechDraft == null) responseRecovery.correction(error) else null
+                    val correction = if (speechDraft == null) responseRecovery.correction(error,harness.native) else null
                     if (correction == null) throw error
-                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, harness.correction(correction))
+                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, correction)
                     mutableUi.update { it.copy(streamingText = "Rechecking the model response…") }
                     return@drive
                 }

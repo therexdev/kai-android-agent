@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModelStore
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kai.agent.KaiViewModel
+import com.kai.agent.account.CreditAccount
+import com.kai.agent.account.CreditAccountClient
 import com.kai.agent.connections.*
 import com.kai.agent.data.*
 import com.kai.agent.inference.*
@@ -67,8 +69,12 @@ class DocumentActionDeviceTest {
     @Test fun repeatedMalformedResponsesStopWithoutApprovalOrExecution() = documentFlow(alwaysInvalid = true)
     @Test fun skippedDiscoveryIsRecoveredBeforeReviewAndOneApprovedWrite() = documentFlow(toolRecovery = true)
     @Test fun repeatedUndiscoveredActionsStopWithoutReviewOrExecution() = documentFlow(alwaysUndiscovered = true)
+    @Test fun prematureConfirmationIsCorrectedIntoConcreteReviewBeforeExecution() = documentFlow(confirmation = true)
 
-    @Test fun savedTaskRecoversDiscoveryAndCannotReplayUnknownSubmission() = runBlocking {
+    @Test fun savedTaskRecoversDiscoveryAndCannotReplayUnknownSubmission() = savedTaskFlow()
+    @Test fun savedTaskCorrectsPrematureConfirmationBeforeReviewAndPreservesUnknown() = savedTaskFlow(confirmation = true)
+
+    private fun savedTaskFlow(confirmation: Boolean = false) = runBlocking {
         val app = App(InstrumentationRegistry.getInstrumentation().targetContext)
         val store = KaiStore(app)
         var catalogReads = 0
@@ -85,8 +91,10 @@ class DocumentActionDeviceTest {
             turns++
             val response = if(messages.first().content.startsWith("Plan the user's task"))
                 """{"steps":[{"title":"Create document","instructions":"Create a Google doc titled test containing test doc"}]}"""
+            else if(confirmation && turns == 2) "I am ready to create the document. Please confirm before I prepare it."
             else {
-                if(turns == 3) assertTrue(messages.last().content.contains("SCHEMA_READY"))
+                if(confirmation && turns == 3) assertTrue(messages.last().content.contains("PREPARE"))
+                if(turns == if(confirmation) 4 else 3) assertTrue(messages.last().content.contains("SCHEMA_READY"))
                 """{"type":"action","accountId":"ca_fixture_1","tool":"GOOGLEDOCS_CREATE_DOCUMENT","arguments":{"title":"test","text":"test doc"}}"""
             }
             Completion(response, "stop")
@@ -94,12 +102,12 @@ class DocumentActionDeviceTest {
         try {
             store.load()
             store.updateSettings { it.copy(selectedProvider=Provider.KOINOS,
-                koinos=ProviderProfile("https://fixture.invalid/v1","fixture-key","fixture-model"),
+                creditAccount=CreditAccount(token="fixture-key",id="fixture-account",model="fixture-model",contextTokens=16384,maxOutput=4096),
                 memoryMode=MemoryMode.OFF,composioApiKey="fixture-composio-key",composioUserId="fixture-owner") }
             val run = store.createRun("Document", "Create a Google doc titled test containing test doc")
             val waiting = requireNotNull(engine.run(run.id, "first-lease"))
             assertEquals(RunStatus.NEEDS_APPROVAL, waiting.status)
-            assertEquals(1, catalogReads); assertEquals(3, turns)
+            assertEquals(1, catalogReads); assertEquals(if(confirmation) 4 else 3, turns)
             val task = store.state.value.tasks.single { it.runId == run.id }
             val intent = requireNotNull(task.intent)
             assertEquals(TaskStatus.AWAITING_APPROVAL, task.status)
@@ -109,12 +117,12 @@ class DocumentActionDeviceTest {
             store.recordReceipt(task.id, ActionReceipt(intent.id, status="UNKNOWN", summary="Fixture response lost"), TaskStatus.UNKNOWN)
             store.setRunStatus(run.id, RunStatus.QUEUED)
             assertEquals(RunStatus.BLOCKED, engine.run(run.id, "second-lease")!!.status)
-            assertEquals(3, turns); assertEquals(1, catalogReads)
+            assertEquals(if(confirmation) 4 else 3, turns); assertEquals(1, catalogReads)
         } finally { store.close(); app.directory.deleteRecursively() }
     }
 
     private fun documentFlow(recover: Boolean = false, alwaysInvalid: Boolean = false, toolRecovery: Boolean = false,
-        alwaysUndiscovered: Boolean = false) = runBlocking {
+        alwaysUndiscovered: Boolean = false, confirmation: Boolean = false) = runBlocking {
         val app = App(InstrumentationRegistry.getInstrumentation().targetContext)
         val owner = ViewModelStore()
         val writes = AtomicInteger()
@@ -144,13 +152,14 @@ class DocumentActionDeviceTest {
         }
         val server = MockWebServer().apply { dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.path == "/platform/api/overview") return MockResponse().setBody("""{"account":{"id":"fixture-account","wallets":[]},"credits":{"free":{"available":"100","state":"AVAILABLE"},"purchased":{"available":"0"}},"models":[{"model":"llama31-8b","available":true,"freeEligible":true,"contextTokens":16384,"maxOutput":4096,"inputCreditsPerMillion":"0","outputCreditsPerMillion":"0"}]}""")
                 if (request.path == "/v1/models") return MockResponse().setBody("""{"data":[{"id":"llama31-8b","context_window":16384,"context_mode":"auto"}]}""")
                 val body = request.body.readUtf8(); wireBodies += body
                 val requestIndex = providerTurns.getAndIncrement()
                 // Reject before discovery, after schema inspection, and after the approved write.
                 val rejectedIndices = if (recover) setOf(0, 4, 6) else emptySet()
                 val malformed = alwaysInvalid || requestIndex in rejectedIndices
-                val turn = requestIndex - rejectedIndices.count { it < requestIndex }
+                val turn = requestIndex - rejectedIndices.count { it < requestIndex } - if(confirmation && requestIndex > 3) 1 else 0
                 val reply = if (alwaysUndiscovered) """{"type":"action","accountId":"ca_fixture_1","tool":"INVENTED_DOCUMENT_ACTION","arguments":{"title":"discard-this"}}"""
                 else if (toolRecovery) when (requestIndex) {
                     0 -> """{"type":"action","accountId":"googledocs","tool":"CREATE_GOOGLE_DOC","arguments":{"title":"discard-this"}}"""
@@ -160,6 +169,7 @@ class DocumentActionDeviceTest {
                     4 -> """{"type":"action","accountId":"ca_fixture_1","tool":"GOOGLEDOCS_CREATE_DOCUMENT","arguments":{"title":"test","text":"test doc"}}"""
                     else -> """{"type":"reply","text":"The request was accepted. https://docs.google.com/document/d/fixture-created/edit The saved contents have not been independently verified."}"""
                 }
+                else if (confirmation && requestIndex == 3) "I am ready to create the document. Please confirm before I prepare it."
                 else if (malformed) """{"type":"action","accountId":"do-not-reuse-this-fragment","arguments":{"title":"unfinished"}""" else when(turn) {
                     0 -> """{"type":"web_search","query":"Google docs create document API"}"""
                     1 -> """{"type":"find_tools","accountId":"ca_fixture_1","search":"create document"}"""
@@ -179,7 +189,7 @@ class DocumentActionDeviceTest {
             try {
                 seed.load()
                 seed.updateSettings { it.copy(selectedProvider = Provider.KOINOS, selectedCharacterId = "nova",
-                    koinos = ProviderProfile(server.url("/v1").toString(), "fixture-provider-key", "llama31-8b"),
+                    creditAccount = CreditAccount(token="fixture-provider-key",id="fixture-account",model="llama31-8b",contextTokens=16384,maxOutput=4096),
                     composioApiKey = "fixture-composio-key", composioUserId = "fixture-owner", connectionGeneration = "fixture-generation") }
                 for(i in 1..8) seed.remember("Personal preference $i " + "with context ".repeat(15))
                 val chat = seed.createConversation("nova")
@@ -194,9 +204,15 @@ class DocumentActionDeviceTest {
                         "Earlier action result detail ".repeat(12), "https://docs.google.com/document/d/earlier-$i/edit"), status)
                 }
             } finally { seed.close() }
+            // Exercise the current managed-account wire entirely against the local fixture.
+            val fixtureHttp = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+                check(chain.request().url.host == "credits.koinosai.com")
+                chain.proceed(chain.request().newBuilder().url(server.url(chain.request().url.encodedPath)).build())
+            }.build()
             main {
                 model = ViewModelProvider(owner, object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = KaiViewModel(app, DirectComposioClient(transport)) as T
+                    @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = KaiViewModel(app, DirectComposioClient(transport),
+                        inference=InferenceClient(fixtureHttp),creditClient=CreditAccountClient(server.url("/").toString().trimEnd('/'))) as T
                 })[KaiViewModel::class.java]
             }
             initialized = true
@@ -216,7 +232,7 @@ class DocumentActionDeviceTest {
             val approval = requireNotNull(model.ui.value.pendingApproval)
             main { model.approveAction(approval.id) }
             await(model) { writes.get() == 1 && !model.ui.value.isBusy && model.ui.value.messages.last().text.contains("fixture-created/edit") }
-            assertEquals(1, writes.get()); assertEquals(if(toolRecovery) 6 else if (recover) 8 else 5, providerTurns.get())
+            assertEquals(1, writes.get()); assertEquals(if(toolRecovery || confirmation) 6 else if (recover) 8 else 5, providerTurns.get())
             assertTrue(model.ui.value.providerStatus.contains("8,192"))
             assertEquals(8, model.ui.value.memories.size)
             KaiStores.acquire(app).use { lease ->
@@ -251,6 +267,7 @@ class DocumentActionDeviceTest {
                 assertTrue(wireBodies[if (recover) 5 else 3].contains("SCHEMA_READY"))
             }
             assertTrue(wireBodies.last().contains("fixture-created"))
+            if (confirmation) assertTrue(wireBodies[4].contains("PREPARE"))
             if (recover) assertTrue(wireBodies.last().contains("Phone format check"))
         } finally {
             main { owner.clear() }

@@ -4,18 +4,18 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.7
+## Test release: 0.5.8
 
-The signed 0.5.7 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.8 test APK is distributed directly. The latest published release remains available above.
 
-- Removes mandatory quote recording and the automatic collection/stalled-run stops introduced in recent updates. Existing source receipts and older notes remain readable.
-- Keeps fetched page text in the bounded model context even when no findings were saved. Cached reads return retained content; exact source IDs open pageable originals.
-- Applies the simplification to chat, saved tasks and routines. Existing run allowances, exact write approval, uncertain-write protection and document read-back remain in force.
-- Includes native protocol 2 on managed follow-ups even when no tools are offered.
+- Makes the write contract explicit: a complete action call prepares the phone's review card; only exact approval authorizes execution.
+- Validates unfinished action requests in the shared native/JSON parser, used by chat and saved tasks/routines. Ordinary readiness prose cannot end the turn; specific missing-input questions and explicit partial/blocked results remain available.
+- Uses the existing bounded response correction and preserves its full explanation in native mode. No new retry controller or increased allowance.
+- Retains 0.5.7 source text retrieval, exact action approval, uncertain-write protection and document read-back.
 
-The tests exercise document-only and document-plus-email sequences with simulated models/services, compaction and resume. They do not establish live Android completion, factual correctness or complete research coverage. See [the regression correction](docs/RESEARCH-EXECUTION-SIMPLIFICATION.md), [validation](qa/0.5.7/VALIDATION.md) and [implementation status](docs/architecture/IMPLEMENTATION_STATUS.md).
+Private replay checks the latest premature-confirmation response and the earlier successful document arguments. Scripted document-only and document-plus-email tests cover compaction and resume. These checks do not establish live model choices or physical Android completion. See [the action review contract](docs/ACTION-REVIEW-CONTRACT.md), [validation](qa/0.5.8/VALIDATION.md) and [implementation status](docs/architecture/IMPLEMENTATION_STATUS.md).
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.7 validation remains open.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.8 validation remains open.
 
 ## Account features
 

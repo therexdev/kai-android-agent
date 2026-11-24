@@ -122,7 +122,7 @@ class ResearchDocumentFlowTest {
         val tasks=mutableListOf<AgentTask>();var tick=100L
         val guard=DocumentContentGuard(request,"chat",1,0,"owner",account.generation)
         suspend fun execute(id: String,args: JSONObject): AgentTask {
-            val tool=tools.getValue(id);val completion=proposal("",args,id);val d=harness.parse(completion,AgentResponseRecovery()) as AgentDecision.PrepareAction
+            val tool=tools.getValue(id);val completion=proposal("",args,id);val d=harness.parse(completion,AgentResponseRecovery(),actionOutstanding=true) as AgentDecision.PrepareAction
             assertNull(web().correction(d));ConnectionArguments.validate(d.arguments.toString(),tool.schemaJson)
             EffectGuard.validate(tasks,"chat",1,d.accountId,tool,d.arguments);guard.validateAction(tool,tasks,d.arguments)
             val intent=ActionIntent(id="intent-$id",toolName=id,accountId=d.accountId,ownerId="owner",connectionGeneration=account.generation,toolVersion=tool.version,toolSchemaJson=tool.schemaJson,argumentsJson=d.arguments.toString(),executionId="run",readOnly=tool.readOnly,effectKind=EffectKinds.classify(tool))
@@ -140,6 +140,14 @@ class ResearchDocumentFlowTest {
             assertTrue(runCatching { TaskRules.transition(task,TaskStatus.RUNNING,settings) }.isFailure)
             return task
         }
+        // The real failure was a readiness reply before any reviewable action. It must use the
+        // existing bounded response repair, not terminate the run or create an approval itself.
+        val recovery=AgentResponseRecovery()
+        val premature=Completion("I am ready to create the document. Please confirm before I proceed.","stop")
+        val rejected=runCatching { harness.parse(premature,recovery,actionOutstanding=true) }.exceptionOrNull() as AgentResponseException
+        val correction=requireNotNull(recovery.correction(rejected,native))
+        assertTrue(correction.contains("PREPARE"));assertEquals(0,services.writes);assertTrue(tasks.isEmpty())
+        context.appendOutcome(correction)
         // The fixture drafts only from material asserted present in the real projected model input.
         val body="Projects\n$sourceText\nSource: $url"
         val write=execute(create,JSONObject().put("title","Projects").put("markdown_text",body))
