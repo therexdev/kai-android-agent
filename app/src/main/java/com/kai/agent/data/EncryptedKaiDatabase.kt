@@ -26,6 +26,8 @@ internal class EncryptedKaiDatabase(context: Context) {
     private var database: SQLiteDatabase?=null
     private var unlockedPassword: ByteArray?=null
     private var previous: KaiState?=null
+    private var storedBytes: Long?=null
+    private var transactionBytes=0L
     private val preserveCorruption=DatabaseErrorHandler { _, error -> throw IllegalStateException("Encrypted database is damaged; existing files were preserved.",error) }
 
     fun openOrMigrate(legacy: () -> KaiState?): KaiState {
@@ -43,7 +45,8 @@ internal class EncryptedKaiDatabase(context: Context) {
                 // Crash between the durable activation marker and atomic rename: finish the verified
                 // staging transaction, never silently resurrect the old JSON recovery snapshot.
                 database=open(staged,password,false)
-                check(requireNotNull(database).version in 1..2) { "Incomplete database activation." }
+                check(requireNotNull(database).version in 1..3) { "Incomplete database activation." }
+                migrateSchema(requireNotNull(database))
                 read()
                 database?.close(); database=null
                 check(staged.renameTo(file)) { "Could not finish database activation." }
@@ -135,9 +138,10 @@ internal class EncryptedKaiDatabase(context: Context) {
     /** Ordered, non-destructive migrations. Unsupported future schemas fail closed. */
     private fun migrateSchema(db: SQLiteDatabase) {
         val version=db.version
-        require(version in 0..2) { "This database needs a newer KAI version." }
-        if (version==2) return
-        if (version==1) { migrateDiagnostics(db); return }
+        require(version in 0..3) { "This database needs a newer KAI version." }
+        if (version==3) return
+        if (version==2) { migrateComponents(db); return }
+        if (version==1) { migrateDiagnostics(db); migrateComponents(db); return }
         db.beginTransaction()
         try {
             db.execSQL("CREATE TABLE app_state (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)")
@@ -163,6 +167,7 @@ internal class EncryptedKaiDatabase(context: Context) {
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
         migrateDiagnostics(db)
+        migrateComponents(db)
     }
 
     private fun migrateDiagnostics(db: SQLiteDatabase) {
@@ -176,6 +181,49 @@ internal class EncryptedKaiDatabase(context: Context) {
             db.version=2
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
+    }
+
+    /** Move large components atomically; old encrypted rows remain authoritative on rollback. */
+    private fun migrateComponents(db: SQLiteDatabase) {
+        db.beginTransaction()
+        try {
+            COMPONENTS.values.forEach { table ->
+                db.execSQL("CREATE TABLE $table (id TEXT PRIMARY KEY, payload TEXT NOT NULL, ordinal INTEGER NOT NULL)")
+            }
+            val root=db.rawQuery("SELECT payload FROM app_state WHERE id=1",emptyArray<String>()).use { c ->
+                if(c.moveToFirst()) JSONObject(c.getString(0)) else null
+            }
+            if(root!=null) {
+                COMPONENTS.forEach { (key,table) ->
+                    val records=root.optJSONArray(key) ?: JSONArray()
+                    for(i in 0 until records.length()) {
+                        val record=records.getJSONObject(i)
+                        db.execSQL("INSERT INTO $table(id,payload,ordinal) VALUES(?,?,?)",arrayOf(record.getString("id"),record.toString(),i))
+                    }
+                    root.put(key,JSONArray())
+                }
+                db.execSQL("UPDATE app_state SET payload=? WHERE id=1",arrayOf(root.toString()))
+            }
+            db.version=3
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+
+    private fun checkStorageSize(): Long {
+        val db=requireNotNull(database)
+        val tables=listOf("app_state","conversations","entities","aliases","facts","evidence","candidates","jobs","vectors","suppressions")+COMPONENTS.values
+        var bytes=8192L
+        tables.forEach { table ->
+            db.rawQuery("SELECT COALESCE(SUM(length(CAST(payload AS BLOB))+1),0) FROM $table",emptyArray<String>()).use { c -> c.moveToFirst();bytes+=c.getLong(0) }
+        }
+        require(bytes<=32L*1024*1024) { "KAI storage limit reached. Existing data was preserved." }
+        return bytes
+    }
+
+    /** Charge only changed rows; routine playback updates do not scan every retained archive. */
+    private fun accountPayload(table: String,id: String,payload: String?) {
+        val old=requireNotNull(database).rawQuery("SELECT length(CAST(payload AS BLOB))+1 FROM $table WHERE id=?",arrayOf(id)).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
+        transactionBytes+=(payload?.toByteArray(Charsets.UTF_8)?.size?.toLong()?.plus(1) ?: 0L)-old
     }
 
     fun diagnosticEpoch(): Long = requireNotNull(database).rawQuery("SELECT epoch FROM diagnostic_meta", emptyArray<String>()).use { it.moveToFirst(); it.getLong(0) }
@@ -215,9 +263,10 @@ internal class EncryptedKaiDatabase(context: Context) {
     fun save(state: KaiState, clearDiagnostics: Boolean = false) {
         val db=requireNotNull(database)
         val old=previous
-        val core=JSONObject(KaiJson.encode(state.copy(memoryGraph=MemoryGraph()))).put("conversations",JSONArray())
+        val core=JSONObject(KaiJson.encode(state.copy(memoryGraph=MemoryGraph(),conversations=emptyList(),executions=emptyList(),runs=emptyList(),documents=emptyList(),tasks=emptyList())))
         val payload=core.toString()
         require(payload.toByteArray().size <= 32*1024*1024) { "KAI storage limit reached." }
+        transactionBytes=storedBytes ?: checkStorageSize()
         db.beginTransaction()
         try {
             if(clearDiagnostics) {
@@ -225,13 +274,16 @@ internal class EncryptedKaiDatabase(context: Context) {
                 db.execSQL("DELETE FROM diagnostic_stats")
                 db.execSQL("UPDATE diagnostic_meta SET epoch=epoch+1,reset_at=?",arrayOf(now()))
             }
+            accountPayload("app_state","1",payload)
             db.execSQL("INSERT OR REPLACE INTO app_state(id,payload) VALUES(1,?)",arrayOf(payload))
-            val conversations=JSONObject(KaiJson.encode(state.copy(memoryGraph=MemoryGraph()))).getJSONArray("conversations")
-            val oldConversations=old?.conversations?.filterNot { it.temporary }?.associateBy { it.id }.orEmpty()
-            val newConversations=state.conversations.filterNot { it.temporary }
-            oldConversations.keys.filter { id -> newConversations.none { it.id==id } }.forEach { db.execSQL("DELETE FROM conversations WHERE id=?",arrayOf(it)) }
-            newConversations.forEachIndexed { i,c -> if (oldConversations[c.id]!=c || old?.conversations?.filterNot { it.temporary }?.indexOfFirst { it.id==c.id }!=i)
-                db.execSQL("INSERT OR REPLACE INTO conversations(id,payload,ordinal) VALUES(?,?,?)",arrayOf(c.id,conversations.getJSONObject(i).toString(),i)) }
+            val persistent=state.conversations.filterNot { it.temporary }
+            val conversationIds=persistent.map { it.id }.toSet()
+            val documents=state.documents.filter { it.projectId.isNotBlank() || it.conversationId in conversationIds }
+            sync("conversations",old?.conversations.orEmpty(),persistent,{it.id},KaiJson::conversation) { emptyMap() }
+            sync("execution_runs",old?.executions.orEmpty(),state.executions.filterNot { it.temporary },{it.id},com.kai.agent.runtime.RunJson::write) { emptyMap() }
+            sync("saved_runs",old?.runs.orEmpty(),state.runs,{it.id},WorkspaceJson::run) { emptyMap() }
+            sync("project_documents",old?.documents.orEmpty(),documents,{it.id},WorkspaceJson::document) { emptyMap() }
+            sync("actions",old?.tasks.orEmpty(),state.tasks,{it.id},KaiJson::task) { emptyMap() }
             val g=state.memoryGraph; val p=old?.memoryGraph ?: MemoryGraph()
             sync("entities",p.entities,g.entities,{it.id},MemoryGraphJson::entity) { e -> mapOf("scope" to e.scope,"type" to e.type,"name" to e.displayName) }
             sync("facts",p.facts,g.facts,{it.id},MemoryGraphJson::fact) { f -> mapOf("subject_id" to f.subjectId,"predicate" to f.predicate,"object_id" to f.objectEntityId,"scope" to f.scope,"status" to f.status.name,"revision" to f.revision) }
@@ -252,18 +304,22 @@ internal class EncryptedKaiDatabase(context: Context) {
                 }
             }
             db.execSQL("INSERT OR REPLACE INTO memory_meta(id,deletion_epoch) VALUES(1,?)",arrayOf(g.deletionEpoch))
+            require(transactionBytes<=32L*1024*1024) { "KAI storage limit reached. Existing data was preserved." }
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
-        previous=state.copy(conversations=state.conversations.filterNot { it.temporary })
+        storedBytes=transactionBytes
+        val persistentIds=state.conversations.filterNot { it.temporary }.map { it.id }.toSet()
+        previous=state.copy(conversations=state.conversations.filterNot { it.temporary },executions=state.executions.filterNot { it.temporary },documents=state.documents.filter { it.projectId.isNotBlank() || it.conversationId in persistentIds })
     }
 
     private fun <T> sync(table:String,before:List<T>,after:List<T>,id:(T)->String,json:(T)->JSONObject,columns:(T)->Map<String,Any?>) {
         val db=requireNotNull(database); val old=before.withIndex().associateBy { id(it.value) }; val next=after.map(id).toSet()
-        old.keys.filterNot { it in next }.forEach { db.execSQL("DELETE FROM $table WHERE id=?",arrayOf(it)) }
+        old.keys.filterNot { it in next }.forEach { accountPayload(table,it,null);db.execSQL("DELETE FROM $table WHERE id=?",arrayOf(it)) }
         after.forEachIndexed { position,value ->
             val prior=old[id(value)]
             if (prior?.value!=value || prior?.index!=position) {
                 val fields=linkedMapOf<String,Any?>("id" to id(value),"payload" to json(value).toString(),"ordinal" to position).apply { putAll(columns(value)) }
+                accountPayload(table,id(value),fields.getValue("payload") as String)
                 db.execSQL("INSERT OR REPLACE INTO $table(${fields.keys.joinToString(",")}) VALUES(${fields.keys.joinToString(",") { "?" }})",fields.values.toTypedArray())
             }
         }
@@ -272,13 +328,15 @@ internal class EncryptedKaiDatabase(context: Context) {
     private fun rows(table: String): JSONArray = JSONArray().also { a -> requireNotNull(database).rawQuery("SELECT payload FROM $table ORDER BY ordinal",emptyArray<String>()).use { c -> while(c.moveToNext()) a.put(JSONObject(c.getString(0))) } }
     private fun read(): KaiState {
         val db=requireNotNull(database)
+        storedBytes=checkStorageSize()
         val root=db.rawQuery("SELECT payload FROM app_state WHERE id=1",emptyArray<String>()).use { c -> check(c.moveToFirst()) { "Database state is missing." }; JSONObject(c.getString(0)) }
         root.put("conversations",rows("conversations"))
+        COMPONENTS.forEach { (key,table) -> root.put(key,rows(table)) }
         val graph=JSONObject()
         listOf("entities","aliases","facts","evidence","candidates","jobs","vectors","suppressions").forEach { graph.put(it,rows(it)) }
         val epoch=db.rawQuery("SELECT deletion_epoch FROM memory_meta WHERE id=1",emptyArray<String>()).use { c -> check(c.moveToFirst()); c.getLong(0) }
         graph.put("deletionEpoch",epoch); root.put("memoryGraph",graph)
-        return KaiJson.decode(root.toString())
+        return KaiJson.decodeObject(root)
     }
 
     fun search(query: String,scopes:Set<String>,limit:Int): List<StructuredFact> {
@@ -292,6 +350,9 @@ internal class EncryptedKaiDatabase(context: Context) {
         }
     }
 
-    fun close() { database?.close(); database=null; previous=null; unlockedPassword?.fill(0); unlockedPassword=null }
-    private companion object { val KEY_HEADER=byteArrayOf(75,68,66,1) }
+    fun close() { database?.close(); database=null; previous=null; storedBytes=null; unlockedPassword?.fill(0); unlockedPassword=null }
+    private companion object {
+        val KEY_HEADER=byteArrayOf(75,68,66,1)
+        val COMPONENTS=linkedMapOf("executions" to "execution_runs","runs" to "saved_runs","documents" to "project_documents","tasks" to "actions")
+    }
 }

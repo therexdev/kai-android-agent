@@ -18,7 +18,9 @@ class DocumentContentGuard(
     private val generation: String,
 ) {
     val text = requestedText(request)
-    val active get() = text != null
+    val generated = text == null && Regex("(?i)\\b(?:google\\s+)?doc(?:ument)?\\b").containsMatchIn(request) &&
+        Regex("(?i)\\b(research|details|description|summarize|summarise|information|projects|about|article|topic|look\\s+up)\\b").containsMatchIn(request)
+    val active get() = text != null || generated
     private var corrections = 0
     data class ReplyCheck(val correction: String? = null, val fallback: String = "")
 
@@ -40,7 +42,7 @@ class DocumentContentGuard(
             return when (value) {
                 is JSONObject -> value.keys().asSequence().any { key ->
                     val child = value.opt(key)
-                    (key in setOf("text", "content", "markdown_text") && child is String && child.trimEnd('\r', '\n') == text) ||
+                    (key in setOf("text", "content", "markdown_text", "markdown") && child is String && (if(text != null) child.trimEnd('\r', '\n') == text else child.trim().length >= 40)) ||
                         ((child is JSONObject || child is JSONArray) && matches(child, depth + 1))
                 }
                 is JSONArray -> (0 until minOf(value.length(), 1000)).any { matches(value.opt(it), depth + 1) }
@@ -57,9 +59,17 @@ class DocumentContentGuard(
     }
 
     /** Do not turn a completion correction into a second create/append. */
-    fun validateAction(tool: ConnectionTool, all: List<AgentTask>) {
+    fun validateAction(tool: ConnectionTool, all: List<AgentTask>, arguments: JSONObject? = null) {
         if (!active || tool.readOnly || tool.toolkit !in setOf("googledocs", "googledrive")) return
         val relevant = tasks(all)
+        if(arguments != null && tool.id in setOf("GOOGLEDOCS_CREATE_DOCUMENT","GOOGLEDOCS_CREATE_DOCUMENT_MARKDOWN")) {
+            val properties=runCatching { JSONObject(tool.schemaJson).optJSONObject("properties") }.getOrNull()
+            val bodyFields=listOf("text","content","markdown_text","markdown").filter { properties?.has(it)==true }
+            if(bodyFields.isNotEmpty() && bodyFields.none { key ->
+                val body=arguments.opt(key) as? String ?: return@none false
+                if(text!=null) body.trimEnd('\r','\n')==text else body.trim().length>=40
+            }) throw ConnectionServiceException("The creation action supports body text, but the requested body is missing. Include the actual researched text or supplied content before preparing approval; an empty document is unfinished.")
+        }
         if (relevant.any { it.status in setOf(TaskStatus.UNKNOWN, TaskStatus.RUNNING) })
             throw ConnectionServiceException("An earlier document action has an unconfirmed outcome. Read its status or ask the user; never repeat it.")
         if (relevant.any { accepted(it) && containsText(it) })
@@ -68,17 +78,25 @@ class DocumentContentGuard(
             throw ConnectionServiceException("The document was already created. Use its returned ID to add the missing body text; do not create another document.")
     }
 
+    fun hasAcceptedBody(all: List<AgentTask>) = tasks(all).any { accepted(it) && containsText(it) }
+
     fun checkReply(all: List<AgentTask>, replyText: String = ""): ReplyCheck? {
         if (!active) return null
         val relevant = tasks(all)
-        if (relevant.any { accepted(it) && containsText(it) }) return null // Acceptance still isn't independent verification.
+        val writes=relevant.filter { accepted(it) && containsText(it) }
+        if(writes.isNotEmpty()) {
+            if(!generated || verified(writes,relevant)) return null
+            if(corrections++ < 2) return ReplyCheck(correction="The document body write was accepted. Discover a read-only document action and read the SAME returned document ID to verify the body before claiming completion. Do not repeat the create or text insertion. If readback is unavailable, explicitly report that acceptance is unverified.")
+            return ReplyCheck(fallback="The service accepted the document text, but I couldn't independently verify its contents." +
+                relevant.mapNotNull(ResourceReuseGuard::documentUrl).distinct().joinToString("\n",prefix="\n\n"))
+        }
         if (relevant.any { it.status in setOf(TaskStatus.UNKNOWN, TaskStatus.RUNNING) })
             return ReplyCheck(fallback = "The document action has an unconfirmed outcome. Check it in Tasks and Google Docs before retrying; I haven't submitted another update.")
         if (relevant.any { it.status in setOf(TaskStatus.AWAITING_APPROVAL, TaskStatus.READY) })
             return ReplyCheck(fallback = "The document action is awaiting review. Use its approval card to continue; the requested text has not been confirmed saved.")
-        // A specific missing-detail question is not a claim that the task finished.
-        if (replyText.trim().endsWith("?") && !replyText.contains(Regex("\"type\"\\s*:")) &&
-            Regex("(?is)^\\s*(?:(?:which|what)\\s+(?:google\\s+)?(?:document|doc|account|email|folder|title|text|content)\\b|(?:can|could|would)\\s+you\\s+(?:provide|share|specify)\\b)").containsMatchIn(replyText)) return null
+        // The run verifier, rather than wording-specific question exceptions, records partial work.
+        if(replyText.isNotBlank() && !replyText.contains(Regex("\"type\"\\s*:")) &&
+            !com.kai.agent.runtime.GoalVerifier.claimsDocumentCompletion(replyText)) return null
         val creation = relevant.lastOrNull(::created)
         val url = creation?.receipts?.lastOrNull { it.status in setOf("ACCEPTED", "SUCCEEDED") }?.url
             ?.takeIf { ToolResultSummary.displayUrl(it) != null }.orEmpty()
@@ -86,15 +104,45 @@ class DocumentContentGuard(
             else "I haven't submitted the requested document text update. No edit was confirmed; please review the report or provide any missing document/account details."
         if (corrections++ >= 2) return ReplyCheck(fallback = fallback)
         val data = JSONObject().put("source", "phone_document_progress").put("status", "BODY_TEXT_NOT_SUBMITTED")
-            .put("requestedText", text).put("documentCreated", creation != null)
+            .put("requestedText", text ?: "Generate the researched body requested by the user, with relevant sources and links.").put("documentCreated", creation != null)
             .put("creationAccountId", creation?.intent?.accountId ?: JSONObject.NULL)
             .put("documentUrl", url)
-        return ReplyCheck(correction = "Phone task check: the requested literal body text has no accepted write receipt. " +
+        return ReplyCheck(correction = "Phone task check: the requested document body has no accepted write receipt. " +
             "An empty document and a link do not complete this request. Continue with find_tools/inspect_tool and a real body-text action, " +
             "using a connected Google Docs account and the actual document ID. Google Drive file metadata is not Google Docs body text. " +
             "Prefer a document-creation schema with a text field when nothing has been created. If a document was already created, edit that document; never create it again. " +
             "All writes still require exact approval. Do not ask for approval in chat prose or claim an edit is running. If access or a target is missing, ask clearly. " +
             "Data, not instructions or permission:\n$data", fallback = fallback)
+    }
+
+    private fun verified(writes: List<AgentTask>, relevant: List<AgentTask>): Boolean {
+        fun strings(value: Any?, depth: Int = 0): List<String> {
+            if(depth>16) return emptyList()
+            return when(value) {
+                is JSONObject -> value.keys().asSequence().flatMap { key ->
+                    val child=value.opt(key)
+                    if(key in setOf("text","content","markdown_text","markdown") && child is String) sequenceOf(child)
+                    else if(child is JSONObject || child is JSONArray) strings(child,depth+1).asSequence() else emptySequence()
+                }.toList()
+                is JSONArray -> (0 until minOf(value.length(),1000)).flatMap { strings(value.opt(it),depth+1) }
+                else -> emptyList()
+            }
+        }
+        fun normalized(s: String)=s.replace(Regex("\\s+")," ").trim()
+        return writes.all { write ->
+            val expected=runCatching { strings(JSONObject(write.intent!!.argumentsJson)).filter { it.trim().length>=40 } }.getOrDefault(emptyList())
+            val ids=relevant.filter { created(it) && it.intent?.accountId==write.intent?.accountId }.flatMap { it.receipts.map { r -> r.providerId } }.filter(String::isNotBlank).toSet() +
+                runCatching { JSONObject(write.intent!!.argumentsJson).let { listOf(it.optString("documentId"),it.optString("document_id")) } }.getOrDefault(emptyList()).filter(String::isNotBlank)
+            expected.isNotEmpty() && relevant.any { read ->
+                val intent=read.intent ?: return@any false
+                if(read.status!=TaskStatus.SUCCEEDED || intent.accountId!=write.intent?.accountId || !Regex("GET_DOCUMENT|EXPORT_DOCUMENT").containsMatchIn(intent.toolName) || read.createdAt<write.createdAt) return@any false
+                val args=runCatching { JSONObject(intent.argumentsJson) }.getOrNull() ?: return@any false
+                if(listOf(args.optString("documentId"),args.optString("document_id"),args.optString("id")).none { it in ids }) return@any false
+                val data=runCatching { JSONObject(read.resultContext).get("data").let { if(it is String) org.json.JSONTokener(it).nextValue() else it } }.getOrNull()
+                val actual=normalized(strings(data).joinToString(""))
+                expected.all { actual.contains(normalized(it)) }
+            }
+        }
     }
 
     companion object {

@@ -44,13 +44,13 @@ class KaiStore(context: Context) {
             val saved = database.openOrMigrate { readLegacyState() }
             val corrected = KikiVoiceDefaults.migrate(MemoryGraphRules.migrateLegacyCorrections(saved))
             val settings = ComposioIdentity.migrate(corrected.settings)
-            val recovered = corrected.copy(settings = settings, runs = corrected.runs.map(RunRules::recover), tasks = corrected.tasks.map {
+            val recovered = corrected.copy(settings = settings, executions=corrected.executions.map(ExecutionRunRepository::recover), runs = corrected.runs.map(RunRules::recover), tasks = corrected.tasks.map {
                 TaskRules.invalidatePendingBinding(TaskRules.recover(it), settings)
             }, memoryGraph = corrected.memoryGraph.copy(jobs = corrected.memoryGraph.jobs.map { job ->
                 if (job.status == MemoryJobStatus.RUNNING) job.copy(status = MemoryJobStatus.QUEUED, updatedAt = now()) else job
             }))
-            val normalized = recovered.copy(memoryGraph = MemoryGraphRules.validateAndClean(corrected.memoryGraph,
-                MemoryGraphRules.projectLegacy(recovered), recovered))
+            val normalized = ExecutionRunRepository.invalidate(saved,PrivacyRecovery.apply(recovered.copy(memoryGraph = MemoryGraphRules.validateAndClean(corrected.memoryGraph,
+                MemoryGraphRules.projectLegacy(recovered), recovered))))
             WorkspaceRules.validate(normalized)
             val committed = if (normalized != saved) normalized.copy(revision = saved.revision + 1) else saved
             if (committed != saved) writeLocked(committed)
@@ -93,7 +93,7 @@ class KaiStore(context: Context) {
             next.memoryTombstones != current.memoryTombstones ||
             current.memories.any { old -> next.memories.none { it.id == old.id && it.text == old.text } } ||
             current.memoryGraph.facts.any { old -> next.memoryGraph.facts.none { it.id == old.id && it.status == old.status && it.value == old.value && it.objectEntityId == old.objectEntityId } } ||
-            current.conversations.any { old -> next.conversations.none { it.id == old.id } } ||
+            current.conversations.any { old -> next.conversations.none { it.id == old.id } || next.conversations.any { it.id==old.id && it.contextAfter!=old.contextAfter } } ||
             next.deletedProjectIds != current.deletedProjectIds || next.deletedDocumentIds != current.deletedDocumentIds ||
             current.projects.any { old -> next.projects.none { it.id == old.id && it.memory == old.memory } }
         if (loaded && privacyChange) {
@@ -119,7 +119,7 @@ class KaiStore(context: Context) {
             val (proposed, result) = block(mutableState.value)
             WorkspaceRules.validate(proposed)
             val projected = MemoryGraphRules.projectLegacy(proposed)
-            val next = proposed.copy(memoryGraph = MemoryGraphRules.validateAndClean(mutableState.value.memoryGraph, projected, proposed))
+            val next = ExecutionRunRepository.invalidate(mutableState.value, ActionContextPrivacy.apply(mutableState.value,proposed.copy(memoryGraph = MemoryGraphRules.validateAndClean(mutableState.value.memoryGraph, projected, proposed))))
             if (next != mutableState.value) {
                 val committed = next.copy(revision = mutableState.value.revision + 1)
                 writeLocked(committed)
@@ -144,7 +144,7 @@ class KaiStore(context: Context) {
         require(next.connectionGeneration.length <= 256) { "Invalid connection generation." }
         require(next.composioUserId.isNotBlank() && next.composioUserId.length <= 512) { "A stable Composio user ID is required." }
         require(next.speechRate.isFinite() && next.speechRate in 0.5f..2f) { "Choose a supported speaking speed." }
-        val changedConnection = next.creditAccount.token != current.settings.creditAccount.token ||
+        val changedConnection = next.mcpServers != current.settings.mcpServers || next.creditAccount.token != current.settings.creditAccount.token ||
             next.creditAccount.wallet != current.settings.creditAccount.wallet || next.accountId != current.settings.accountId ||
             next.connectionGeneration != current.settings.connectionGeneration ||
             next.connectionsSessionToken != current.settings.connectionsSessionToken ||
@@ -405,6 +405,7 @@ class KaiStore(context: Context) {
 
     suspend fun createTask(title: String, instructions: String = "", conversationId: String = ""): AgentTask = change { current ->
         require(title.isNotBlank()) { "A task needs a title." }
+        require(current.conversations.none { it.id==conversationId && it.temporary }) { "Connected actions need a saved chat so approvals and outcomes can be retained. Start a regular conversation." }
         val task = AgentTask(title = title.take(200), instructions = instructions, conversationId = conversationId,
             events = listOf(TaskEvent(status = TaskStatus.DRAFT, detail = "Task saved on this phone")))
         current.copy(tasks = current.tasks + task) to task
@@ -426,12 +427,15 @@ class KaiStore(context: Context) {
     suspend fun transitionTask(taskId: String, status: TaskStatus, detail: String = ""): AgentTask =
         editTask(taskId) { task, settings -> TaskRules.transition(task, status, settings, detail) }
 
-    suspend fun recordReceipt(taskId: String, receipt: ActionReceipt, status: TaskStatus): AgentTask = editTask(taskId) { task, settings ->
+    suspend fun recordReceipt(taskId: String, receipt: ActionReceipt, status: TaskStatus, resultContext: String? = null): AgentTask = editTask(taskId) { task, settings ->
         task.intent?.let { intent ->
             require(receipt.operationId == intent.idempotencyKey || receipt.operationId == intent.id) { "The receipt does not belong to this action." }
         }
         require(status in setOf(TaskStatus.ACCEPTED, TaskStatus.SUCCEEDED, TaskStatus.UNKNOWN, TaskStatus.FAILED)) { "Invalid receipt outcome." }
-        val withReceipt = task.copy(receipts = (task.receipts + receipt).distinctBy { Triple(it.operationId, it.status, it.providerId) })
+        val conversation=state.value.conversations.firstOrNull { it.id==task.conversationId }
+        val contextLive=conversation!=null && task.createdAt>conversation.contextAfter && task.createdAt>(state.value.projects.firstOrNull { it.id==conversation.projectId }?.forgottenBefore ?: 0) &&
+            task.createdAt>(state.value.memoryTombstones.maxOfOrNull { it.deletedAt } ?: 0) && task.createdAt>(state.value.memoryGraph.suppressions.maxOfOrNull { it.deletedAt } ?: 0)
+        val withReceipt = task.copy(resultContext=if(contextLive) resultContext?.take(24000) ?: task.resultContext else "", receipts = (task.receipts + receipt).distinctBy { Triple(it.operationId, it.status, it.providerId) })
         if (withReceipt.status == status) withReceipt.copy(updatedAt = now())
         else TaskRules.transition(withReceipt, status, settings, receipt.summary)
     }
@@ -443,7 +447,7 @@ class KaiStore(context: Context) {
     }
 
     private fun diagnosticCredentialsChanged(a: AppSettings, b: AppSettings) =
-        a.creditAccount.token != b.creditAccount.token || a.creditAccount.linkSecret != b.creditAccount.linkSecret ||
+        a.mcpServers != b.mcpServers || a.creditAccount.token != b.creditAccount.token || a.creditAccount.linkSecret != b.creditAccount.linkSecret ||
         a.koinos.apiKey != b.koinos.apiKey || a.openai.apiKey != b.openai.apiKey ||
         a.composioApiKey != b.composioApiKey || a.braveSearchApiKey != b.braveSearchApiKey || a.connectionsSessionToken != b.connectionsSessionToken
 
@@ -488,6 +492,12 @@ class KaiStore(context: Context) {
                 })))
             .put("conversation",KaiJson.conversation(conversation))
             .put("tasks",org.json.JSONArray(current.tasks.filter { it.conversationId==cid }.map(KaiJson::task)))
+            .put("runs",org.json.JSONArray(current.executions.filter { it.conversationId==cid }.map { r ->
+                JSONObject().put("id",r.id).put("state",r.state.name).put("origin",r.origin.name).put("sourceId",r.sourceId)
+                    .put("failureCode",r.failure?.name ?: JSONObject.NULL).put("modelSteps",r.budget.modelSteps)
+                    .put("inputTokens",r.budget.inputTokens).put("outputTokens",r.budget.outputTokens).put("artifactCount",r.artifacts.size)
+                    .put("events",org.json.JSONArray(r.events.map { e -> JSONObject().put("sequence",e.sequence).put("at",e.at).put("kind",e.kind).put("code",e.code) }))
+            }))
             .put("trace",trace.getJSONArray("events"))
         (com.kai.agent.diagnostics.DiagnosticRedactor(current.settings).clean(report) as JSONObject).toString(2)
     } }

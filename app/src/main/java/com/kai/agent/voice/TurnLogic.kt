@@ -66,14 +66,35 @@ object SpeechEchoGuard {
     private val interruptionWords = setOf("stop", "wait", "pause", "cancel", "actually", "no")
 
     fun isLikelyEcho(recognized: String, speakingText: String): Boolean {
-        val input = words(recognized)
-        val output = words(speakingText)
+        val input = echoWords(recognized)
+        val output = echoWords(speakingText)
         if (input.isEmpty() || output.isEmpty()) return false
-        // Explicit short interruptions win, even though this can cause an occasional false stop.
-        if (input.size <= 2 && input.first() in interruptionWords) return false
-        if (input.size > output.size) return false
-        return output.windowed(input.size).any { it == input }
+        // An explicit correction wins even when much of it repeats the assistant's wording.
+        if (input.first() in interruptionWords) return false
+        if (output.windowed(input.size).any { it == input }) return true
+        // ASR may truncate its last partial word, expand e.g., or mishear/omit one word.
+        // Match a bounded recent *spoken* window; future reply text is never evidence.
+        if (input.size < 4) return false
+        val allowance = (input.size / 5).coerceIn(1, 4)
+        var previous = IntArray(output.size + 1) // Free start: match a contiguous output span.
+        for (i in input.indices) {
+            val next = IntArray(output.size + 1)
+            next[0] = i + 1
+            for (j in output.indices) {
+                val matches = input[i] == output[j] ||
+                    (i == input.lastIndex && input[i].length >= 4 && output[j].startsWith(input[i]))
+                next[j + 1] = minOf(previous[j + 1] + 1, next[j] + 1, previous[j] + if (matches) 0 else 1)
+            }
+            previous = next
+        }
+        return previous.drop(1).any { it <= allowance }
     }
+
+    private fun echoWords(text: String): List<String> = words(text
+        .replace(Regex("\\be\\.g\\.", RegexOption.IGNORE_CASE), "for example")
+        .replace(Regex("\\bweb\\s+site\\b", RegexOption.IGNORE_CASE), "website"))
+
+    fun isExplicitInterruption(text: String): Boolean = words(text).firstOrNull() in interruptionWords
 
     fun hasBargeInEvidence(recognized: String, speakingText: String): Boolean {
         val input = words(recognized)
@@ -83,11 +104,17 @@ object SpeechEchoGuard {
 
     /** Remove a clear multi-word assistant prefix when a transcript contains echo + interruption. */
     fun userTranscript(recognized: String, speakingText: String, suppressPureEcho: Boolean = true): String {
-        if (suppressPureEcho && isLikelyEcho(recognized, speakingText)) return ""
         val matches = Regex("[\\p{L}\\p{N}']+").findAll(recognized).toList()
         val input = matches.map { it.value.lowercase(Locale.ROOT) }
         if (input.firstOrNull() in interruptionWords) return recognized.trim()
         val output = words(speakingText)
+        // A user can append a short "no"/"stop" to speaker echo. Preserve that correction
+        // before approximate matching can mistake the extra word for a recognition error.
+        for (count in (input.size - 1) downTo 3) {
+            if (input[count] in interruptionWords && output.windowed(count).any { it == input.take(count) })
+                return recognized.substring(matches[count].range.first).trim()
+        }
+        if (suppressPureEcho && isLikelyEcho(recognized, speakingText)) return ""
         // Never discard a short shared name/phrase or leave an isolated ambiguous word.
         for (count in (input.size - 1) downTo 3) {
             if (output.windowed(count).any { it == input.take(count) }) {
@@ -96,6 +123,22 @@ object SpeechEchoGuard {
             }
         }
         return recognized.trim()
+    }
+}
+
+/** A transient non-echo partial is not enough to stop playback. Explicit stop remains immediate. */
+internal class BargeInConfirmation {
+    private var since: Long? = null
+    private var candidate = emptyList<String>()
+    fun clear() { since = null; candidate = emptyList() }
+    fun accept(text: String, spoken: String, now: Long, final: Boolean = false): Boolean {
+        if (final && words(text).isNotEmpty() && !SpeechEchoGuard.isLikelyEcho(text, spoken)) return true
+        if (!SpeechEchoGuard.hasBargeInEvidence(text, spoken)) { clear(); return false }
+        if (SpeechEchoGuard.isExplicitInterruption(text)) return true
+        val prefix = words(text).take(2)
+        if (prefix != candidate) { clear(); candidate = prefix }
+        val first = since ?: now.also { since = it }
+        return now - first >= 350
     }
 }
 

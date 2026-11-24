@@ -23,6 +23,20 @@ object WorkspaceRules {
             require(it.projectId.isNotBlank() || state.conversations.any { c -> c.id == it.conversationId }) { "The file's conversation is no longer available." }
         }
         require(state.documents.sumOf { it.text.length.toLong() } <= 4000000 && state.documents.sumOf { it.imageBase64.length.toLong() } <= 12000000) { "File storage is full. Remove unused files first." }
+        require(state.settings.mcpServers.size<=20 && state.settings.mcpServers.map { it.id }.distinct().size==state.settings.mcpServers.size)
+        state.settings.mcpServers.forEach { it.validate() }
+        require(state.templates.size<=100)
+        state.templates.forEach { com.kai.agent.extensions.WorkflowTemplate.parse(it) }
+        require(state.executions.size<=500 && state.executions.map { it.id }.distinct().size==state.executions.size)
+        require(state.executions.sumOf { it.archive.length.toLong()+it.observations.sumOf { o -> o.content.length.toLong() } }<=8_000_000) { "Saved run storage is full. Remove old conversations first." }
+        state.executions.forEach { r ->
+            require(r.schemaVersion==1 && r.id.isNotBlank() && r.archive.length<=2_000_000 && r.events.size<=200 && r.tools.size<=100 && r.artifacts.size<=4)
+            require(r.observations.size<=256 && r.observations.sumOf { it.content.length.toLong() }<=2_000_000)
+            require(r.artifacts.all { it.text.length<=48000 && it.kind=="DRAFT" && it.sourceUrls.size<=100 && it.version>0 })
+            require(r.budget.modelSteps>=0 && r.budget.inputTokens>=0 && r.budget.outputTokens>=0)
+            require(r.budget.maxModelSteps in 1..10000 && r.budget.maxOutputTokens in 1..100_000_000)
+            require(r.events.zipWithNext().all { (a,b) -> b.sequence>a.sequence })
+        }
         state.runs.forEach(RunRules::validate)
         state.routines.forEach {
             require(it.title.isNotBlank() && it.title.length <= 200 && it.goal.isNotBlank() && it.goal.length <= 12000)

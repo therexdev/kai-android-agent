@@ -1,0 +1,36 @@
+{
+  "schema": "kai.workflow.v1",
+  "id": "research-review",
+  "version": 1,
+  "name": "Research and review",
+  "goal": "Research {{input}} and prepare a source-linked draft",
+  "requiredCapabilities": ["web"],
+  "nodes": [
+    {
+      "id": "research",
+      "title": "Research",
+      "instructions": "Research {{input}}. Find relevant sources, read supporting pages and retain evidence limits.",
+      "dependsOn": [],
+      "model": "",
+      "kind": "AGENT"
+    },
+    {
+      "id": "draft",
+      "title": "Draft",
+      "instructions": "Write a useful draft from the retained findings. Cite source URLs, disclose uncertainty and do not publish.",
+      "dependsOn": ["research"],
+      "model": "",
+      "kind": "AGENT"
+    },
+    {
+      "id": "review",
+      "title": "Review",
+      "instructions": "Review the draft against the goal and retained sources. Reply text must be JSON with verdict PASS or REVISE and changes. Never execute external writes.",
+      "dependsOn": ["draft"],
+      "model": "",
+      "kind": "REVIEW",
+      "reviewTarget": "draft",
+      "maxRevisions": 2
+    }
+  ]
+}

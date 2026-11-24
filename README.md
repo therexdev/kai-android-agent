@@ -4,9 +4,22 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Update prepared: 0.4.29
+## Test release: 0.5.0
 
-The 0.4.29 APK is built and tested, but its GitHub attachment is still pending. The latest published GitHub APK is 0.4.28.
+**[Download the 0.5.0 test APK](https://github.com/therexdev/kai-android-agent/releases/download/v0.5.0-alpha.1/KAI-Android-0.5.0.apk)**
+
+- Chat, voice, saved tasks and routines use a shared execution controller with an encrypted run journal.
+- Research findings and drafts survive model failures and restart. Continue and Answer from findings preserve useful work.
+- Exact action approvals, durable submission receipts, uncertain-write reconciliation and returned document links stay on the phone.
+- Model failures have typed recovery; optional ordered fallbacks preserve the selected account and free/paid policy.
+- Adds user-owned remote MCP connections, bounded workflow templates with per-node models and at most two review rounds, and cited file retrieval with coverage reporting.
+- Includes automatic context management, connected paid credits, the model dropdown and the earlier voice interruption changes.
+
+This is the first test release of the architecture refactor. The [64-item implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md) identifies implemented, partial, gated and future capabilities. Physical-phone audio and live connected-service acceptance require testing. Native tool calling also requires a separately deployed and qualified gateway route; installing this APK does not activate it.
+
+Follow the [test guide](docs/architecture/ALPHA_TEST_GUIDE.md). The encrypted database upgrade preserves existing data and pending approvals; older APKs cannot open the new database schema. Keep an export before updating if you need a deliberate downgrade.
+
+## Account features
 
 - **Use purchased credits** enables paid balances from credit accounts connected to your website login, including linked Core wallets.
 - **Automatic · connected accounts** follows your primary credit account and can choose another linked account that can cover a request. Select a specific account to pin its balance.
@@ -35,14 +48,14 @@ The phone owns conversation history, memory, task records, files, and permission
 
 ## Install or update
 
-1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download `KAI-Android-0.4.29.apk`.
+1. Open [Releases](https://github.com/therexdev/kai-android-agent/releases/latest) and download the latest signed `KAI-Android-*.apk`, or install the newer APK supplied with the update.
 2. Open the APK on an **ARM64 Android 9 or newer** device. If Android asks, allow installation from the app you used to download it.
 3. Install over the existing **kai** app. Keep the existing installation to retain its encrypted local data.
 4. Open **Account** in the top bar, choose **Sign in / Create account**, and complete email or Google sign-in in your browser.
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **36**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **40**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 
@@ -80,6 +93,7 @@ Use JDK 17 or 21, Android SDK platform 36 / build-tools 36.0.0, and the checked-
 - [Memory architecture](docs/MEMORY-ARCHITECTURE.md)
 - [Web research](docs/WEB-RESEARCH-AND-CORE.md)
 - [Chat reports](docs/CHAT-REPORTS.md)
+- [Agent context management](docs/AGENT-CONTEXT.md)
 - [Build history](docs/BUILD-HISTORY.md)
 - [0.4.29 validation](qa/0.4.29/VALIDATION.md)
 

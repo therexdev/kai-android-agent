@@ -1,0 +1,53 @@
+package com.kai.agent.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.kai.agent.runtime.*
+
+@Composable
+internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: ExecutionRun? = null) {
+    val run=selected ?: state.executions.lastOrNull { it.conversationId==state.currentConversationId && it.origin==RunOrigin.CHAT } ?: return
+    if(run.state in setOf(ExecutionState.COMPLETED,ExecutionState.CANCELLED)) {
+        if(state.speechAudible && run.conversationId==state.currentConversationId)
+            TextButton(onClick=actions::stopSpeakingOnly) { Text("Stop speaking") }
+        return
+    }
+    var expanded by remember(run.id) { mutableStateOf(false) }
+    Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surfaceContainer,modifier=Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text(when(run.state) {
+                ExecutionState.RUNNING -> "Working on your request"
+                ExecutionState.WAITING_APPROVAL -> "Ready for review"
+                ExecutionState.WAITING_INPUT -> "Your answer is needed"
+                ExecutionState.RECONCILING -> "Action outcome needs checking"
+                ExecutionState.PARTIAL -> "Progress saved · work remains"
+                ExecutionState.FAILED -> "Stopped · progress saved"
+                else -> "Paused · progress saved"
+            },style=MaterialTheme.typography.titleSmall)
+            if(run.detail.isNotBlank()) Text(run.detail,style=MaterialTheme.typography.bodySmall)
+            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                if(run.resumable && !state.isBusy) {
+                    TextButton(onClick={actions.continueExecution(run.id,false)}) { Text("Continue") }
+                    if(run.archive!="[]") TextButton(onClick={actions.continueExecution(run.id,true)}) { Text("Answer from findings") }
+                }
+                if(run.state==ExecutionState.RUNNING) TextButton(onClick={actions.pauseExecution(run.id)}) { Text("Pause task") }
+                if(run.state==ExecutionState.WAITING_INPUT) TextButton(onClick={actions.pauseExecution(run.id)}) { Text("Set aside · new request") }
+                if(state.speechAudible) TextButton(onClick=actions::stopSpeakingOnly) { Text("Stop speaking") }
+                TextButton(onClick={expanded=!expanded}) { Text(if(expanded) "Hide progress" else "View progress") }
+            }
+            if(expanded) {
+                Text("${run.budget.modelSteps} steps · ${run.budget.inputTokens+run.budget.outputTokens} reported tokens",style=MaterialTheme.typography.bodySmall)
+                run.artifacts.lastOrNull()?.let { artifact ->
+                    Text("Saved draft · version ${artifact.version} · not published",style=MaterialTheme.typography.titleSmall)
+                    MarkdownReply(artifact.text)
+                }
+                run.events.takeLast(8).forEach { event ->
+                    Text(when(event.kind) { "checkpoint" -> "Progress saved"; "step_admitted" -> "Next step started"; "claimed" -> "Run started"; "outcome" -> "Run paused or finished"; else -> event.kind.replace('_',' ') },style=MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}

@@ -40,7 +40,11 @@ suspend fun KaiStore.setRunStatus(id: String, status: RunStatus): AgentRun = cha
         if (task.runId == id && task.submittedAt == null && task.status in setOf(TaskStatus.DRAFT,TaskStatus.READY,TaskStatus.AWAITING_APPROVAL))
             TaskRules.transition(task,TaskStatus.CANCELLED,state.settings,"Parent task cancelled") else task
     }
-    withRun(state.copy(tasks=tasks),next) to next
+    val executions=state.executions.map { r ->
+        if(r.sourceId!=id || status==RunStatus.QUEUED) r else r.copy(state=if(status==RunStatus.CANCELLED) com.kai.agent.runtime.ExecutionState.CANCELLED else com.kai.agent.runtime.ExecutionState.PAUSED,
+            owner="",detail=next.detail,revision=r.revision+1)
+    }
+    withRun(state.copy(tasks=tasks,executions=executions),next) to next
 }
 suspend fun KaiStore.skipRunStep(id: String): AgentRun = change { state ->
     val run = state.runs.first { it.id == id }
@@ -77,7 +81,7 @@ suspend fun KaiStore.finishRunStep(id: String, lease: String, stepId: String, ou
 
 /** The step pointer and exact external intent commit together, before any request can be submitted. */
 suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: ActionIntent, title: String,
-                                      assistantJson: String, readOnly: Boolean): AgentTask = change { state ->
+                                      assistantJson: String, readOnly: Boolean, nativeCalls: List<com.kai.agent.inference.ToolCall> = emptyList()): AgentTask = change { state ->
     val run=state.runs.first { it.id==runId }; RunRules.requireOwner(run,lease)
     val step=requireNotNull(run.currentStep); require(step.pendingActionId.isBlank())
     require(step.contextRevision == WorkspaceRules.contextRevision(state,run.projectId,run.conversationId)) { "Project context changed; resume to refresh the task." }
@@ -85,7 +89,7 @@ suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: Acti
     var task=AgentTask(title=title,instructions=run.goal,intent=intent,status=TaskStatus.AWAITING_APPROVAL,
         conversationId=run.conversationId,runId=runId,events=listOf(TaskEvent(status=TaskStatus.AWAITING_APPROVAL,detail="Prepared exact action")))
     if(readOnly) task=TaskRules.approve(task,state.settings)
-    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson))
+    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson,toolCalls=nativeCalls))
     val updatedRun=run.copy(steps=run.steps.map { if(it.id==step.id) updatedStep else it },updatedAt=now())
     withRun(state.copy(tasks=state.tasks+task),updatedRun) to task
 }
@@ -112,10 +116,10 @@ suspend fun KaiStore.consumeRunAction(runId: String, lease: String, taskId: Stri
     val run=state.runs.first { it.id==runId }; RunRules.requireOwner(run,lease)
     val step=requireNotNull(run.currentStep); require(step.pendingActionId==taskId)
     val action=state.tasks.first { it.id==taskId }
-    require(action.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.FAILED,TaskStatus.CANCELLED))
+    require(action.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED,TaskStatus.FAILED,TaskStatus.CANCELLED))
     val result=action.resultContext.ifBlank { action.receipts.lastOrNull()?.summary ?: action.lastError.ifBlank { "Action was not executed." } }
-    val updated=step.copy(pendingActionId="",messages=step.messages+RunMessage("user",
-        "Phone action outcome: ${action.status}. Do not repeat this operation. Untrusted result data:\n$result"))
+    val updated=step.copy(pendingActionId="",messages=step.messages+RunMessage(if(step.messages.lastOrNull()?.toolCalls?.isNotEmpty()==true) "tool" else "user",
+        "Phone action outcome: ${action.status}. Do not repeat this operation. Untrusted result data:\n$result",toolCallId=step.messages.lastOrNull()?.toolCalls?.singleOrNull()?.id.orEmpty()))
     val next=run.copy(steps=run.steps.map { if(it.id==step.id) updated else it },updatedAt=now())
     withRun(state,next) to next
 }
@@ -180,7 +184,7 @@ suspend fun KaiStore.deleteProject(id: String) = change { state ->
     val tasks=state.tasks.mapNotNull { task ->
         if(task.runId !in runIds && task.conversationId !in conversationIds) task
         else if(task.submittedAt==null) null
-        else task.copy(instructions="",resultContext="") // Keep exact submission/receipt evidence for reconciliation.
+        else task.copy(instructions="",resultContext="",contextArchive="") // Keep exact submission/receipt evidence for reconciliation.
     }
     state.copy(projects=state.projects.filterNot { it.id==id },deletedProjectIds=(state.deletedProjectIds+id).distinct(),
         documents=state.documents.filterNot { it.projectId==id },deletedDocumentIds=(state.deletedDocumentIds+state.documents.filter { it.projectId==id }.map { it.id }).distinct(),
@@ -201,8 +205,42 @@ suspend fun KaiStore.directRun(id: String, text: String): AgentRun = change { st
         TaskRules.transition(it,TaskStatus.CANCELLED,state.settings,"Superseded by your new directions") else it }
     val instructions=step.instructions+"\nAdditional directions from you: "+text.trim()
     require(instructions.length<=12000) { "These directions are too long. Start a smaller task." }
-    val updated=step.copy(instructions=instructions,messages=emptyList(),tools=emptyList(),pendingActionId="",turns=0)
+    val updated=step.copy(instructions=instructions,messages=emptyList(),contextSummary="",tools=emptyList(),pendingActionId="",turns=0)
     val next=run.copy(steps=run.steps.map { if(it.id==step.id)updated else it },status=RunStatus.QUEUED,lease="",detail="Continuing with your directions",updatedAt=now())
     val conversations=state.conversations.map { if(it.id==run.conversationId)it.copy(messages=it.messages+ChatMessage(role="user",text=text.trim()),updatedAt=now()) else it }
     withRun(state.copy(tasks=tasks,conversations=conversations),next) to next
+}
+
+/** Checkpoint belongs to the same exact unsubmitted action and current connection owner. */
+suspend fun KaiStore.saveActionCheckpoint(id: String, checkpoint: String, expectedRevision: Long, archive: String = ""): AgentTask = change { state ->
+    require(checkpoint.length <= 64_000 && archive.length <= 2_000_000)
+    val task=state.tasks.first { it.id==id }
+    require(task.submittedAt==null && task.status==TaskStatus.AWAITING_APPROVAL)
+    val conversation=state.conversations.first { it.id==task.conversationId }
+    require(WorkspaceRules.contextRevision(state,conversation.projectId,conversation.id)==expectedRevision) { "Context changed; prepare a fresh action." }
+    require(task.createdAt>conversation.contextAfter && task.createdAt>(state.projects.firstOrNull { it.id==conversation.projectId }?.forgottenBefore ?: 0))
+    TaskRules.validateBinding(requireNotNull(task.intent),state.settings)
+    val next=task.copy(resultContext=org.json.JSONObject().put("checkpoint",org.json.JSONArray(checkpoint)).toString(),contextArchive=archive)
+    state.copy(tasks=state.tasks.map { if(it.id==id) next else it }) to next
+}
+
+/** Definition, model choices, review bounds and run admission are one durable transaction. */
+suspend fun KaiStore.createTemplateRun(template: com.kai.agent.extensions.WorkflowTemplate, input: String, projectId: String, characterId: String): AgentRun = change { state ->
+    val (next,created)=makeRun(state,template.name,template.goal.replace("{{input}}",input),projectId,characterId,emptyList())
+    val run=created.copy(steps=template.steps(input))
+    RunRules.validate(run)
+    next.copy(runs=next.runs.map { if(it.id==run.id) run else it }) to run
+}
+
+/** Called only by an explicit user continuation, never by a worker retry or approval callback. */
+suspend fun KaiStore.authorizeRunContinuation(id: String) = change { state ->
+    val run=state.runs.first { it.id==id }
+    require(run.status !in setOf(RunStatus.RUNNING,RunStatus.QUEUED)) { "Pause this task before changing its allowance." }
+    val executions=state.executions.map { r ->
+        if(r.sourceId!=id || !r.budget.exhausted) r else {
+            require(r.owner.isBlank()) { "The previous owner is still settling." }
+            r.copy(budget=r.budget.copy(maxModelSteps=r.budget.modelSteps+192,maxOutputTokens=r.budget.outputTokens+524288),revision=r.revision+1)
+        }
+    }
+    state.copy(executions=executions) to Unit
 }

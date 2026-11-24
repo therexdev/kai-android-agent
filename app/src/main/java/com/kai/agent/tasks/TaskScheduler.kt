@@ -15,6 +15,8 @@ import com.kai.agent.data.*
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 class TaskScheduler(private val context: Context) {
     private val manager=WorkManager.getInstance(context)
@@ -56,15 +58,42 @@ class TaskScheduler(private val context: Context) {
     }
 }
 class AgentRunWorker(context: Context, parameters: WorkerParameters): CoroutineWorker(context,parameters) {
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val channel="kai_execution"
+        applicationContext.getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(channel,"KAI running tasks",NotificationManager.IMPORTANCE_LOW))
+        val cancel=WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)
+        val notification=NotificationCompat.Builder(applicationContext,channel).setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("KAI is working").setContentText("Progress is saved. Open KAI to review this task.").setOngoing(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).addAction(android.R.drawable.ic_media_pause,"Pause",cancel).build()
+        return if(Build.VERSION.SDK_INT>=29) ForegroundInfo(id.hashCode(),notification,android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            else ForegroundInfo(id.hashCode(),notification)
+    }
     override suspend fun doWork(): Result {
         val handle=KaiStores.acquire(applicationContext)
         return try {
             handle.store.load()
             val id=inputData.getString("id") ?: return Result.failure()
+            try { setForeground(getForegroundInfo()) } catch(e: CancellationException) { throw e }
+            catch(_: Exception) {
+                val run=handle.store.state.value.runs.firstOrNull { it.id==id }
+                if(run!=null && !run.terminal) handle.store.setRunStatus(id,RunStatus.PAUSED)
+                return Result.success()
+            }
             val result=TaskAgentEngine(handle.store).run(id,UUID.randomUUID().toString())
             result?.let { TaskScheduler(applicationContext).notify(it) }
-            if(result?.status==RunStatus.QUEUED)Result.retry() else Result.success()
-        } catch(e: CancellationException) { throw e } catch(_: Exception) { Result.retry() } finally { handle.close() }
+            if(result?.status==RunStatus.QUEUED && runAttemptCount<3) Result.retry()
+            else {
+                if(result?.status==RunStatus.QUEUED) handle.store.setRunStatus(result.id,RunStatus.PAUSED)
+                Result.success()
+            }
+        } catch(e: CancellationException) {
+            withContext(NonCancellable) {
+                val runId=inputData.getString("id")
+                val run=handle.store.state.value.runs.firstOrNull { it.id==runId }
+                if(run?.status==RunStatus.QUEUED) runCatching { handle.store.setRunStatus(run.id,RunStatus.PAUSED) }
+            }
+            throw e
+        } catch(_: Exception) { if(runAttemptCount<3) Result.retry() else Result.failure() } finally { handle.close() }
     }
 }
 class RoutineWorker(context: Context, parameters: WorkerParameters): CoroutineWorker(context,parameters) {

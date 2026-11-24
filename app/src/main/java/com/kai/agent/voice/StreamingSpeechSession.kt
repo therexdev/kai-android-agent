@@ -167,7 +167,8 @@ internal class StreamingSpeechSession(
     /** Only the recent played/current chunk can be acoustic echo; unspoken future text cannot. */
     fun echoReference(includeCurrent: Boolean = true): String {
         val end = inFlight?.takeIf { includeCurrent }?.let { it.spokenStart + it.text.length } ?: heardSpoken
-        return spokenHistory.substring((heardSpoken - 220).coerceAtLeast(0), end.coerceAtLeast(heardSpoken))
+        // A recognizer endpoint can span several phrases, including earlier completed chunks.
+        return spokenHistory.substring((heardSpoken - 2000).coerceAtLeast(0), end.coerceAtLeast(heardSpoken))
     }
 }
 

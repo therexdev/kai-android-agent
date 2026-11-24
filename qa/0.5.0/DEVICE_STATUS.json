@@ -1,0 +1,6 @@
+{
+  "installed": false,
+  "instrumentationStarted": false,
+  "passed": false,
+  "error": "Android package services did not become ready"
+}

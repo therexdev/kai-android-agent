@@ -70,4 +70,25 @@ class WorkspaceRulesTest {
         assertThrows(IllegalArgumentException::class.java) { TaskAgentEngine.parsePlan("""{"steps":[]}""") }
         assertThrows(IllegalArgumentException::class.java) { TaskAgentEngine.parsePlan("""{"steps":[{"title":"","instructions":""}]}""") }
     }
+
+    @Test fun nativeCheckpointRoundTripKeepsCallIdsAndLegacyMessages() {
+        val call=com.kai.agent.inference.ToolCall("call_docs_1","action_fixture","{\"title\":\"Projects\"}")
+        val messages=listOf(RunMessage("user","Research projects"),RunMessage("assistant","",listOf(call)),RunMessage("tool","Accepted document_fixture_123",toolCallId=call.id))
+        val run=AgentRun(title="Document",goal="Research projects",conversationId="chat",steps=listOf(RunStep(title="Write",instructions="Create body",messages=messages)))
+        val decoded=KaiJson.decode(KaiJson.encode(KaiState(runs=listOf(run))))
+        assertEquals(messages,decoded.runs.single().steps.single().messages)
+        com.kai.agent.inference.NativeToolWire.validate(decoded.runs.single().steps.single().messages.map { com.kai.agent.inference.InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) },true)
+    }
+
+    @Test fun forgetDiscardsApprovalResearchButPreservesSubmittedIntentAndReceipts() {
+        val chat=Conversation(id="chat")
+        val intent=ActionIntent(toolName="CREATE",accountId="fixture",argumentsJson="{\"title\":\"Projects\"}")
+        val task=AgentTask(title="Projects",conversationId=chat.id,createdAt=100,status=TaskStatus.UNKNOWN,submittedAt=101,intent=intent,resultContext="private earlier research",receipts=listOf(ActionReceipt(intent.id,"real_id","UNKNOWN")))
+        val state=KaiState(conversations=listOf(chat),tasks=listOf(task))
+        val forgotten=state.copy(memoryGraph=state.memoryGraph.copy(deletionEpoch=state.memoryGraph.deletionEpoch+1))
+        val safe=ActionContextPrivacy.apply(state,forgotten).tasks.single()
+        assertEquals("",safe.resultContext);assertEquals(intent,safe.intent);assertEquals(task.receipts,safe.receipts);assertEquals(TaskStatus.UNKNOWN,safe.status)
+        assertEquals(task,ActionContextPrivacy.apply(state,state).tasks.single())
+        assertEquals("",ActionContextPrivacy.apply(state,state.copy(conversations=emptyList())).tasks.single().resultContext)
+    }
 }

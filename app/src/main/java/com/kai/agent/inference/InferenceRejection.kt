@@ -4,6 +4,10 @@ import org.json.JSONObject
 
 /** Fixed diagnostic vocabulary only: no provider text, prompts, paths or credentials reach the UI. */
 internal object InferenceRejection {
+    fun isContextOverflow(body: String): Boolean {
+        val text=body.lowercase()
+        return listOf("context_length_exceeded","context_window_exceeded","context_limit","maximum context length","context limit exceeded","prompt too large","too many tokens","128 kb","request entity too large").any { it in text }
+    }
     fun describe(body: String, status: Int?): String? {
         val root = runCatching { JSONObject(body) }.getOrNull()
         val error = root?.optJSONObject("error") ?: root

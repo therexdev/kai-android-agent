@@ -134,7 +134,7 @@ internal fun TemporaryChatBanner(actions:KaiUiActions) {
             KaiIcon(KaiGlyph.SHIELD,Modifier.size(18.dp),MaterialTheme.colorScheme.onSurfaceVariant)
             Column(Modifier.weight(1f)) {
                 Text("Temporary chat",style=MaterialTheme.typography.labelMedium)
-                Text("This chat stays in this session. It won’t use or save memories.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("This chat stays in this session. It won’t use or save memories. Connected actions need a saved chat.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick=actions::newConversation,contentPadding=PaddingValues(8.dp)){Text("End",style=MaterialTheme.typography.labelMedium)}
         }

@@ -12,7 +12,7 @@ import java.net.URI
 /** Only sanitized, bounded values may cross the durable diagnostics boundary. */
 class DiagnosticRedactor(settings: AppSettings) {
     private val secrets = listOf(settings.koinos.apiKey, settings.openai.apiKey, settings.composioApiKey,
-        settings.braveSearchApiKey, settings.connectionsSessionToken, settings.creditAccount.token, settings.creditAccount.linkSecret).filter { it.isNotBlank() }.distinct().sortedByDescending { it.length }
+        settings.braveSearchApiKey, settings.connectionsSessionToken, settings.creditAccount.token, settings.creditAccount.linkSecret).plus(settings.mcpServers.flatMap { server -> listOf(server.token,server.endpoint)+runCatching { java.net.URI(server.endpoint).rawPath }.getOrNull().orEmpty().split('/').filter { it.length>=24 } }).filter { it.isNotBlank() }.distinct().sortedByDescending { it.length }
     private val routes = listOf(settings.koinos.endpoint, settings.openai.endpoint, settings.connectionsBaseUrl)
         .mapNotNull { runCatching { URI(it).rawPath }.getOrNull() }.filter { it.contains("/r/") }
     private fun sensitive(key: String): Boolean = key.lowercase().replace(Regex("[^a-z0-9]"), "") in setOf(
@@ -45,7 +45,7 @@ class DiagnosticRedactor(settings: AppSettings) {
         return when (value) {
             null, JSONObject.NULL -> JSONObject.NULL
             is JSONObject -> JSONObject().also { result -> value.keys().forEach { key ->
-                result.put(text(key), if(sensitive(key)) "[credential-removed]" else clean(value.opt(key), depth + 1))
+                result.put(text(key), if(key=="contextArchive") "[encrypted task archive omitted from report]" else if(sensitive(key)) "[credential-removed]" else clean(value.opt(key), depth + 1))
             } }
             is JSONArray -> JSONArray().also { result -> for(i in 0 until minOf(value.length(), 2000)) result.put(clean(value.opt(i), depth + 1))
                 if(value.length() > 2000) result.put(JSONObject().put("omittedItems", value.length()-2000)) }
@@ -87,6 +87,7 @@ class ChatTrace internal constructor(
     }
     suspend fun error(kind: String, error: Throwable) = record(kind, JSONObject()
         .put("class", error.javaClass.simpleName).put("message", error.message.orEmpty())
+        .put("failureCode",(error as? com.kai.agent.inference.InferenceException)?.failureCode?.name ?: JSONObject.NULL)
         .put("httpStatus", (error as? com.kai.agent.inference.InferenceException)?.httpStatus ?: (error as? com.kai.agent.connections.ConnectionServiceException)?.statusCode ?: JSONObject.NULL))
 }
 

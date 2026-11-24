@@ -139,6 +139,36 @@ class NaturalConversationDeviceTest {
             assertTrue(rig.utterances.isEmpty())
         }
     }
+    @Test fun speakerEchoWithTruncatedWordsCannotInterruptOrSubmitAUserTurn() {
+        Rig().use { rig ->
+            onMain { rig.controller.speak("For example, name, brief description and website. Another sentence continues the reply.", "echo") }
+            waitFor { rig.states.contains(VoiceState.SPEAKING) }
+            rig.command("begin")
+            rig.command("partial", "for example name brief descript")
+            rig.endpoint("for example name brief descript")
+            waitFor { rig.finished.any { it.first == "echo" } }
+            assertEquals(false, rig.finished.first { it.first == "echo" }.second)
+            assertEquals(0, rig.bargeIns.get())
+            assertTrue(rig.utterances.toString(), rig.utterances.isEmpty())
+            assertTrue(rig.listening)
+        }
+    }
+    @Test fun aTransientPartialDoesNotStopSpeechButAConfirmedUserCorrectionDoes() {
+        Rig().use { rig ->
+            onMain { rig.controller.speak("A long story continues. ".repeat(100), "confirmed") }
+            waitFor { rig.states.contains(VoiceState.SPEAKING) }
+            rig.command("begin")
+            rig.command("partial", "please find websites")
+            assertFalse(rig.finished.any { it.first == "confirmed" })
+            Thread.sleep(400)
+            rig.command("partial", "please find websites for the projects")
+            waitFor { rig.finished.any { it.first == "confirmed" } }
+            rig.endpoint("please find websites for the projects")
+            waitFor { rig.utterances.isNotEmpty() }
+            assertEquals(listOf("please find websites for the projects"), rig.utterances.toList())
+            assertEquals(1, rig.bargeIns.get())
+        }
+    }
     @Test fun ongoingDictationSurvivesTheOldSixtySecondStartupLimit() {
         Rig().use { rig ->
             val first = rig.sequence.get()

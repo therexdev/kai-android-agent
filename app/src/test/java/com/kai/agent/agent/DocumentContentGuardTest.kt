@@ -20,7 +20,7 @@ class DocumentContentGuardTest {
         assertEquals("test doc", guard().text)
         assertEquals("this is a test doc", guard("can you write \"this is a test doc\" in that google doc?").text)
         assertEquals("test", guard("Create a Google doc named \"hello\" containing \"test\"").text)
-        assertFalse(guard("Research current news and write a Google document about it").active)
+        assertTrue(guard("Research current news and write a Google document about it").active)
         assertFalse(guard("Tell me how to write into a document").active)
     }
     @Test fun capturedMetadataOnlyCreationRequiresBodyStepAndNeverRepeatsCreation() {
