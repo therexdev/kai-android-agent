@@ -4,19 +4,18 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.6
+## Test release: 0.5.7
 
-The signed 0.5.6 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.7 test APK is distributed directly. The latest published release remains available above.
 
-- Shares durable progress control across chat, saved tasks and routines, including native and JSON tool protocols. Repeated or failed reads cannot gain a fresh allowance by restarting the adapter.
-- Stops exhausted search independently from page reading, closes stalled collection, and reserves remaining run allowance for drafting and reviewed actions.
-- Preserves a bounded canonical view of saved claims and source references; cached pages return retrieval pointers instead of full duplicate copies. Canonical run contexts do not spend model requests on automatic summaries.
-- Removes topic-specific retrieval heuristics and duplicate attributions while retaining exact quotation checks, exact write approval, UNKNOWN-outcome protection and document read-back.
-- Filters HTML gateway error bodies from diagnostics while retaining the HTTP failure classification.
+- Removes mandatory quote recording and the automatic collection/stalled-run stops introduced in recent updates. Existing source receipts and older notes remain readable.
+- Keeps fetched page text in the bounded model context even when no findings were saved. Cached reads return retained content; exact source IDs open pageable originals.
+- Applies the simplification to chat, saved tasks and routines. Existing run allowances, exact write approval, uncertain-write protection and document read-back remain in force.
+- Includes native protocol 2 on managed follow-ups even when no tools are offered.
 
-These controls measure repeated/failed work; they do not verify semantic novelty, full research coverage or factual accuracy. The observed upstream HTTP 502 has a separate server-side cause that this app update does not establish or repair. See [shared progress control](docs/SHARED-PROGRESS-CONTROL.md), [validation](qa/0.5.6/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
+The tests exercise document-only and document-plus-email sequences with simulated models/services, compaction and resume. They do not establish live Android completion, factual correctness or complete research coverage. See [the regression correction](docs/RESEARCH-EXECUTION-SIMPLIFICATION.md), [validation](qa/0.5.7/VALIDATION.md) and [implementation status](docs/architecture/IMPLEMENTATION_STATUS.md).
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.6 behavior remains a separate validation gate.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.7 validation remains open.
 
 ## Account features
 

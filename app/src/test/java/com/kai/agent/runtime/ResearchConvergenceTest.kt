@@ -3,9 +3,25 @@ import com.kai.agent.agent.AgentDecision
 import com.kai.agent.inference.InferenceMessage
 import com.kai.agent.web.*
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 class ResearchConvergenceTest {
+    @Test fun `network exhaustion still permits cached source reads after restart`()=runTest {
+        val urls=(0..10).map { "https://example.org/page$it" }
+        var research=ResearchEvidence();var calls=0
+        val client=WebResearchClient(WebTransport { url,_->calls++;WebDocument(url,"<main>Retained source content for $url</main>","text/html") })
+        val request="Research "+urls.joinToString(" ")
+        val session=WebResearchSession(request,client,onResult={ research=research.append(it,1);research.receiptContext(it.getString("requestKey")) })
+        urls.take(10).forEach { session.execute(AgentDecision.ReadWebPage(it)) }
+        assertFalse(session.readAvailable);assertEquals(10,calls)
+        val resumed=WebResearchSession(request,client,trustedResults=research.receipts.map { it.result })
+        val cached=JSONObject(resumed.execute(AgentDecision.ReadWebPage(urls.first())).removePrefix(WebResearchSession.PREFIX))
+        assertTrue(cached.getBoolean("cached"));assertFalse(cached.getBoolean("networkAttempt"))
+        assertTrue(cached.getString("text").contains("Retained source content"))
+        assertTrue(resumed.execute(AgentDecision.ReadWebPage(urls.last())).contains("PAGE_BUDGET_EXHAUSTED"))
+        assertEquals(10,calls);assertEquals(10,research.receipts.size)
+    }
     @Test fun `failed URL remains cached after restart and failure cause stays distinct`()=runTest {
         var attempts=0
         val client=WebResearchClient(WebTransport { _,_ -> attempts++;throw WebResearchException("denied","HTTP_403") })

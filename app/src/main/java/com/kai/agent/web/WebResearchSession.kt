@@ -74,9 +74,8 @@ class WebResearchSession(
         return null
     }
     /** The same capability admission applies to native and JSON proposals. */
-    fun admission(decision: AgentDecision, collectionClosed: Boolean = false): String? {
+    fun admission(decision: AgentDecision): String? {
         val kind=when(decision) { is AgentDecision.WebSearch -> "search";is AgentDecision.ReadWebPage -> "page";else -> return null }
-        if(collectionClosed) return policyResult(kind,"COLLECTION_CLOSED","Collection is paused. Use read_context for retained findings and prepare the requested output or an honest partial result.")
         if(kind=="search" && !searchAvailable) return policyResult(kind,"SEARCH_BUDGET_EXHAUSTED",budgetSummary)
         if(kind=="page" && !readAvailable) return policyResult(kind,"PAGE_BUDGET_EXHAUSTED",budgetSummary)
         return null
@@ -84,7 +83,6 @@ class WebResearchSession(
     suspend fun execute(decision: AgentDecision): String {
         // Enforce this even for callers that omit correction(); no search query leaves the phone.
         require(!suppliedContent) { "This document request supplies its content and does not need public web research." }
-        admission(decision)?.let { return it }
         val kind = if(decision is AgentDecision.WebSearch) "search" else "page"
         if(decision is AgentDecision.WebSearch && (decision.query.isBlank() || decision.query.length>300 || decision.query.any { it.code<32 }))
             return policyResult(kind,"INVALID_QUERY","Use a short public search query.")
@@ -97,18 +95,12 @@ class WebResearchSession(
         }
         cached[key]?.let {
             noProgress++
-            // Cached reads retain an addressable receipt, not another full copy of the page.
-            val result=JSONObject().put("kind",it.optString("kind")).put("status",it.optString("status"))
-                .put("requestKey",key).put("cached",true).put("networkAttempt",false).put("budget",budgetSummary)
-                .put("message","Already captured. Use read_context research/findings/source:ID for original evidence; prepare the remaining requested output instead of repeating this read.")
-            for(field in listOf("code","url","requestedUrl","title")) if(it.has(field)) result.put(field,it.opt(field))
-            onResult(result)?.let { raw ->
-                val index=JSONObject(raw)
-                result.put("evidence",JSONObject().put("sourceCount",index.optInt("sourceCount")).put("findingCount",index.optInt("findingCount"))
-                    .put("readContextEntries",org.json.JSONArray(listOf("research","findings"))))
-            }
+            // The requested retained content is still a read result, not a new network action.
+            val result=JSONObject(it.toString()).put("cached",true).put("networkAttempt",false).put("budget",budgetSummary)
+            onResult(result)?.let { index -> result.put("evidence",JSONObject(index)) }
             return PREFIX+result
         }
+        admission(decision)?.let { return it }
         val result = try {
             when(decision) {
                 is AgentDecision.WebSearch -> {

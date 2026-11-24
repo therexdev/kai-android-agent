@@ -223,13 +223,13 @@ class InferenceClient(client: OkHttpClient? = null,
             .put("compactedMessages",prepared.messages.count { item -> messages.none { it.role==item.role && it.content==item.content } })
             .put("messages",JSONArray(prepared.messages.map { NativeToolWire.messageJson(it).put("imageCount",it.images.size) })))
         require(messages.none { it.providerReplay!=null } || config.accountSession) { "Provider continuation belongs to the managed account route." }
+        if(config.accountSession && config.nativeTools) body.put("native_protocol",2)
         var payload = body.toString()
         if (config.provider == ProviderId.KOINOS && payload.toByteArray(Charsets.UTF_8).size > 128 * 1024) {
             throw InferenceException("This request exceeds Koinos AI's 128 KB limit. Shorten the conversation or attached content.")
         }
         if(config.tools.isNotEmpty()) {
             require(config.nativeTools) { "This model and gateway have not advertised native tool support." }
-            if(config.accountSession) body.put("native_protocol",2)
             body.put("tools",JSONArray(config.tools.map(NativeToolWire::toolJson))).put("tool_choice","auto").put("parallel_tool_calls",false)
             payload = body.toString()
             require(payload.toByteArray().size <= 128 * 1024) { "The tool schemas exceed the request limit. Discover fewer actions." }

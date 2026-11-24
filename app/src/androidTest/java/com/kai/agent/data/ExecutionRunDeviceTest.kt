@@ -42,15 +42,13 @@ class ExecutionRunDeviceTest {
         isolated { context ->
             val first=KaiStore(context);first.load()
             val chat=first.createConversation();val message=first.appendMessage(chat.id,"user","Research private-sentinel-topic")
-            val session=RunController(ExecutionRunRepository(first)).open(ExecutionRun("run",chat.id,message.id,RunOrigin.CHAT,GoalContract(message.text),privacyRevision=ExecutionRunRepository.privacy(first.state.value,chat.id),createdAt=now()))
+            val session=RunController(ExecutionRunRepository(first)).open(ExecutionRun("run",chat.id,message.id,RunOrigin.CHAT,GoalContract(message.text),privacyRevision=ExecutionRunRepository.privacy(first.state.value,chat.id),createdAt=now(),progress=RunProgress(stalled=2,collectionClosed=true,reason="Retired 0.5.6 policy")))
             session.checkpoint("private-sentinel-result");session.draft("private-sentinel-draft")
             val quotation="private-sentinel-source publishes an open toolkit."
             session.recordResearch(org.json.JSONObject().put("kind","page").put("status","ok").put("networkAttempt",true)
                 .put("url","https://example.test/source").put("requestedUrl","https://example.test/source")
                 .put("requestKey","page:https://example.test/source").put("text",quotation).put("truncated",false))
             session.recordFindings(listOf(com.kai.agent.web.FindingProposal("private-sentinel-claim","s1_0",quotation)))
-            repeat(3) { i -> session.observeProgress(com.kai.agent.agent.AgentDecision.ReadWebPage("https://example.test/source"),
-                """{"kind":"page","status":"ok","requestKey":"page:https://example.test/source","budget":"changing $i"}""") }
             first.close()
             val bytes=File(context.noBackupFilesDir,"kai-state/memory.db").readBytes().toString(Charsets.ISO_8859_1)
             assertFalse(bytes.contains("private-sentinel"))
