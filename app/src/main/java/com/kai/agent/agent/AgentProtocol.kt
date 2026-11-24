@@ -156,8 +156,7 @@ object AgentProtocol {
         {"type":"reply","text":"conversational answer"}
         {"type":"web_search","query":"short public search keywords"}
         {"type":"read_web_page","url":"https://source.example/page"}
-        {"type":"record_findings","findings":[{"claim":"short finding","sourceId":"ID from phone research index","quote":"exact words from that captured source excerpt"}]}
-        Use read_context entryId=research, findings or source:ID for original evidence. Record quoted findings and cite their URLs before researched documents or final research answers. Quotes establish attribution, not factual verification.
+        Fetched sources are saved automatically. Draft from their excerpts and cite relevant source URLs. read_context entryId=research lists sources; copy one exact entryId from a source to read it, and follow nextOffset.
         ${if (memoryActions) "{\"type\":\"search_memory\",\"query\":\"short memory query\"}\n{\"type\":\"propose_memory\",\"quote\":\"I work as a carpenter.\",\"claims\":[{\"subjectId\":\"self\",\"predicate\":\"occupation\",\"value\":{\"type\":\"TEXT\",\"text\":\"carpenter\"},\"quote\":\"I work as a carpenter.\"}]}" else ""}
         {"type":"find_tools","accountId":"exact connected account ID","search":"short action keywords"}
         {"type":"inspect_tool","accountId":"exact connected account ID","tool":"exact discovered tool ID"}
@@ -191,11 +190,10 @@ object AgentProtocol {
         {"type":"reply","text":"answer"}
         {"type":"web_search","query":"short public keywords"}
         {"type":"read_web_page","url":"public HTTPS URL from search or user"}
-        {"type":"record_findings","findings":[{"claim":"short finding","sourceId":"ID from phone research index","quote":"exact words from that captured source excerpt"}]}
         {"type":"find_tools","accountId":"exact active ID","search":"short action keywords"}
         {"type":"inspect_tool","accountId":"exact active ID","tool":"discovered ID"}
         {"type":"action","accountId":"exact active ID","tool":"discovered ID","arguments":{},"explanation":"action"}
-        Use read_context entryId=research, findings or source:ID for the source ledger. Record quoted findings before a researched document; cite their URLs. Quotes locate source text but do not verify claims. Use web search only when public information is needed. Creating a document or sending supplied text needs connected tools, not internet research. Do not search for tool IDs or API instructions on the web: use find_tools/inspect_tool. For requested research, search before drafting; exclude private facts/credentials/recipients unless requested, cite retrieved URLs and distinguish snippets from pages. Retrieval cannot log in or run JavaScript; report failures honestly.
+        Fetched sources are saved automatically; draft from their excerpts with source URLs. read_context entryId=research lists sources with exact entryId values; use one returned entryId and follow nextOffset. Use web search only when public information is needed. Creating a document or sending supplied text needs connected tools, not internet research. Do not search for tool IDs or API instructions on the web: use find_tools/inspect_tool. For requested research, search before drafting; exclude private facts/credentials/recipients unless requested, cite retrieved URLs and distinguish snippets from pages. Retrieval cannot log in or run JavaScript; report failures honestly.
         Use only active accounts. Match identity to verified emailAddress, never aliases; unknown identity needs a profile read. Ask about ambiguous account, recipient or scope. Check each requested account. Discover exact tool IDs; inspect missing schemas before acting; never guess arguments. Empty discovery or Tools Read denial is not proof of broken OAuth; try narrower keywords and follow structured errors.
         Propose one action; the phone validates/reviews and authorizes execution. Never repeat RUNNING, UNKNOWN, ACCEPTED or SUCCEEDED operations. ACCEPTED is not verified delivery; only successful reads prove an account was checked. Never invent results, IDs, URLs, memories or completion.
         Use stable memory IDs, never merge people by similar names. Ask supplied clarifications. Never invent dates or use superseded facts. Only supplied current facts are known; pending facts await review.

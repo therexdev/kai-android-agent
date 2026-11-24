@@ -1,5 +1,7 @@
 # Shared progress control (0.5.6)
 
+> Historical 0.5.6 design. In 0.5.7, mandatory finding/citation gates and automatic collection/stalled-run stops are retired; cached reads again return content and canonical context includes fetched text. The current contract and compatibility limits are in [Research execution simplification](RESEARCH-EXECUTION-SIMPLIFICATION.md).
+
 ## Report evidence and root causes
 
 The supplied Android 13 / 0.5.5 report records 39 admitted model requests, including four summaries, 24 saved findings, no saved draft and no action proposal. Its retained tail includes repeated cached page reads and denied searches. The final inference request received an upstream HTTP 502. Earlier trace entries were dropped under the report-size limit, so the retained tail is not a complete execution history.

@@ -42,26 +42,10 @@ class ResearchRunTest {
             assertEquals(ExecutionState.FAILED,recovered.state)
             assertEquals(quotation,recovered.research.findings.single().quote)
             val resumed=RunController(repo).open(recovered)
-            assertNull(resumed.reviewResearch("Supported draft $url",true,emptySet()))
+            assertTrue(resumed.record.research.context().contains(quotation))
             assertEquals("Supported draft $url",resumed.record.artifacts.single().text)
             resumed.finish(ExecutionState.PAUSED)
         }
-    }
-    @Test fun correctionsAreBoundedAcrossRestartsBeforeAnyNewProposal()=runTest {
-        val repo=Repo();var session=RunController(repo).open(run(RunOrigin.CHAT))
-        session.recordResearch(page());session.recordFindings(listOf(proposal()))
-        var prepared=0
-        repeat(3) { attempt ->
-            session.draft("Unsupported https://invented.test/page")
-            if(session.reviewResearch("Unsupported https://invented.test/page",true,emptySet())==null) prepared++
-            if(attempt<2) {
-                session.finish(ExecutionState.PAUSED)
-                session=RunController(repo).open(RunJson.read(RunJson.write(requireNotNull(repo.saved))))
-            }
-        }
-        assertEquals(0,prepared);assertEquals(ExecutionState.PARTIAL,repo.saved?.state)
-        assertEquals(2,repo.saved?.research?.corrections);assertEquals(1,repo.saved?.research?.findings?.size)
-        assertTrue(repo.saved!!.artifacts.isNotEmpty());assertEquals("",repo.saved?.owner)
     }
     @Test fun invalidBatchDoesNotCommitPartialFindingsAndStaleCallbackCannotRestoreThem()=runTest {
         val repo=Repo();val s=RunController(repo).open(run(RunOrigin.CHAT));s.recordResearch(page())

@@ -16,6 +16,32 @@ class CanonicalProgressContextTest {
             .put("requestKey","page:$url").put("networkAttempt",true).put("truncated",false).put("text",quotes.joinToString(" "))
         return ResearchEvidence().append(page,1).record(quotes.map { FindingProposal(it,"s1_0",it) },2)
     }
+    @Test fun zeroNotesStillProjectFetchedTextAndPageEverySourceAfterRestart() {
+        for(text in listOf("Useful project details. ".repeat(250).take(5900),"项目说明和来源。".repeat(700).take(5900))) {
+            var research=ResearchEvidence()
+            repeat(10) { i ->
+                research=research.append(JSONObject().put("kind","page").put("status","ok")
+                    .put("requestedUrl","${url}page$i").put("url","${url}page$i").put("requestKey","page:${url}page$i")
+                    .put("networkAttempt",true).put("truncated",false).put("text",text),i.toLong())
+            }
+            research=ResearchEvidenceJson.read(ResearchEvidenceJson.write(research))
+            assertTrue(research.findings.isEmpty())
+            val raw=research.context();val projection=JSONObject(raw);val selected=projection.getJSONArray("sources")
+            assertTrue(raw.toByteArray(Charsets.UTF_8).size<=9000)
+            assertEquals("source:s10_0",selected.getJSONObject(0).getString("entryId"))
+            assertTrue(selected.getJSONObject(0).getString("excerpt").isNotBlank())
+            assertEquals(10,projection.getInt("omittedSources")+selected.length())
+            // The bounded index itself can span pages; every advertised ID opens the original text.
+            fun readAll(id: String): String {
+                val result=StringBuilder();var offset=0
+                do { val page=JSONObject(research.read(id,offset)!!);result.append(page.getString("excerpt"));offset=if(page.isNull("nextOffset")) -1 else page.getInt("nextOffset") } while(offset>=0)
+                return result.toString()
+            }
+            val all=JSONObject(readAll("research")).getJSONArray("sources")
+            assertEquals(10,all.length())
+            for(i in 0 until all.length()) assertEquals(text,readAll(all.getJSONObject(i).getString("entryId")))
+        }
+    }
     @Test fun canonicalFindingsSurviveCatalogChurnWithoutPayingForDiscardedSummaries()=runTest {
         for(native in listOf(false,true)) {
             val request="Research community projects, create a document and email its link."
@@ -50,15 +76,15 @@ class CanonicalProgressContextTest {
         assertEquals(12,duplicate.findings.size);assertEquals("f1",duplicate.findings.first().id)
         assertEquals(quotes.first(),duplicate.findings.first().quote)
     }
-    @Test fun cachedReadsReturnPointersAndKeepTheFullReceiptAddressable()=runTest {
+    @Test fun cachedReadsReturnUsefulTextWithoutAnotherNetworkCall()=runTest {
         var r=ResearchEvidence();var calls=0
         val c=WebResearchClient(WebTransport { address,_->calls++;WebDocument(address,"<main>"+quotes.joinToString(" ")+"x".repeat(4000)+"</main>","text/html") })
         val web=WebResearchSession("Research $url",c,trustedResults=emptyList(),onResult={ r=r.append(it,1);r.receiptContext(it.optString("requestKey")) })
         val first=web.execute(AgentDecision.ReadWebPage(url))
         repeat(5) {
             val cached=web.execute(AgentDecision.ReadWebPage(url))
-            assertTrue(cached.length<2000);assertFalse(cached.contains(quotes.first()))
-            assertTrue(cached.contains("read_context"))
+            assertTrue(cached.contains(quotes.first()))
+            assertTrue(cached.contains("source:s1_0"))
         }
         assertEquals(1,calls);assertEquals(1,r.receipts.size)
         assertTrue(r.read("source:s1_0",0)!!.contains(quotes.first()))

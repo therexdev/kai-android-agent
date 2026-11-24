@@ -56,7 +56,7 @@ class ResearchEvidenceTest {
         val r=captured().record(listOf(finding().copy(claim="An unverified model interpretation.")),200)
         val data=r.read("findings",0)!!
         assertFalse(JSONArray(JSONObject(data).getString("excerpt")).getJSONObject(0).getBoolean("claimVerified"))
-        assertTrue(r.reviewSummary().contains("factual accuracy and coverage still need review"))
+        assertTrue(r.reviewSummary().contains("Factual accuracy and coverage still need review"))
     }
     @Test fun sourceIdentifiersResolveOnlyWithinTheirRun() {
         val other=ResearchEvidence().append(page(text="An entirely different source excerpt."),1)
@@ -68,40 +68,16 @@ class ResearchEvidenceTest {
         val fresh=old.append(page(text="Newer page content no longer says that."),3)
         assertTrue(fresh.superseded(fresh.sources.first()))
         assertTrue(runCatching { fresh.record(listOf(finding().copy(claim="Another claim")),4) }.isFailure)
-        assertNotNull(fresh.review("A claim $url",true))
         assertTrue(fresh.reviewSummary().contains("newer page request"))
     }
     @Test fun aNewerFailureThroughRedirectAliasesCannotHideBehindAnOldMatch() {
         val old=ResearchEvidence().append(page(requested="https://example.test/alias"),1).record(listOf(finding()),2)
         val next=old.append(page(status="unavailable"),3)
-        assertTrue(next.superseded(next.sources.single()));assertNotNull(next.review("Claim $url",true))
-    }
-    @Test fun referenceReviewRequiresFindingsAndACitedCapturedSource() {
-        assertNotNull(captured().review("Claim $url",true))
-        val r=captured().record(listOf(finding()),2)
-        assertNotNull(r.review("A claim without a citation.",true))
-        assertNotNull(r.review("Claim https://example.test/unread",true))
-        assertNull(r.review("Claim [source]($url#section)",true))
-    }
-    @Test fun inventedAndHttpLinksCannotBorrowAValidCitation() {
-        val r=captured().record(listOf(finding()),2)
-        assertNotNull(r.review("Claim $url plus https://fabricated.test/claim",true))
-        assertNotNull(r.review("Claim $url plus http://fabricated.test/claim",true))
-        assertNotNull(r.review("Claim $url plus https://private.local/claim",true))
-        assertNotNull(r.review("Claim $url plus https://user:password@example.test/claim",true))
-        assertNotNull(r.review("Claim $url plus HTTPS://fabricated.test/claim",true))
-        assertNull(r.review("Claim $url; project: https://example.test/unread",true))
-        assertNull(r.review("Result https://docs.google.com/document/d/fixture/edit",false,setOf("https://docs.google.com/document/d/fixture/edit")))
+        assertTrue(next.superseded(next.sources.single()))
     }
     @Test fun snippetOnlyAttributionRemainsClearlyLabelled() {
         val r=ResearchEvidence().append(search(),1).record(listOf(finding()),2)
-        assertNull(r.review("Search excerpt says this: $url",true))
         assertTrue(r.context().contains("SEARCH_SNIPPET"));assertFalse(r.context().contains("PAGE_EXCERPT"))
-    }
-    @Test fun aCitationFloorDoesNotClaimCompleteCoverage() {
-        val r=captured().record(listOf(finding()),2)
-        assertNull(r.review("One attributed item $url and another unverified model claim.",true))
-        assertTrue(r.context().contains("completeness"));assertTrue(r.context().contains("not entailment"))
     }
     @Test fun malformedFutureOrTamperedStorageFailsClosed() {
         val good=ResearchEvidenceJson.write(captured())
@@ -115,7 +91,7 @@ class ResearchEvidenceTest {
         val first=JSONObject(r.read("source:s1_0",0)!!);assertFalse(first.isNull("nextOffset"))
         val second=JSONObject(r.read("source:s1_0",first.getInt("nextOffset"))!!)
         val reconstructed=first.getString("excerpt")+second.getString("excerpt")
-        assertEquals(r.sources.single().text,JSONObject(reconstructed).getString("text"))
+        assertEquals(r.sources.single().text,reconstructed)
     }
     @Test fun batchAndFindingStorageAreBoundedWithoutDroppingEarlierFindings() {
         val r=captured();assertTrue(runCatching { r.record(List(13) { finding() },2) }.isFailure)
@@ -124,13 +100,13 @@ class ResearchEvidenceTest {
         assertEquals(96,full.findings.size);assertTrue(runCatching { full.record(listOf(finding().copy(claim="Extra")),3) }.isFailure)
         assertEquals("Claim 0",full.findings.first().claim)
     }
-    @Test fun nativeAndJsonPathsDecodeTheSameBoundedFindingBatch() {
+    @Test fun legacyFindingBatchesRemainReadableButAreNotAdvertisedAsNativeWorkflow() {
         val args=JSONObject().put("findings",JSONArray().put(JSONObject().put("claim","A claim").put("sourceId","s1_0").put("quote",quote)))
         val expected=AgentProtocol.parse(JSONObject(args.toString()).put("type","record_findings").toString())
         val h=AgentHarness(true);val config=h.config(ProviderConfig(ProviderId.KOINOS,"https://example.test","fixture","model"),emptyList())
-        assertTrue(config.tools.any { it.name=="record_findings" })
-        val actual=h.parse(Completion("","tool_calls",toolCalls=listOf(ToolCall("call","record_findings",args.toString()))),AgentResponseRecovery())
-        assertEquals(expected,actual)
+        assertFalse(config.tools.any { it.name=="record_findings" })
+        assertTrue(expected is AgentDecision.RecordFindings) // Existing legacy JSON archives remain parseable.
+        assertTrue(runCatching { h.parse(Completion("","tool_calls",toolCalls=listOf(ToolCall("call","record_findings",args.toString()))),AgentResponseRecovery()) }.isFailure)
         assertTrue(runCatching { AgentProtocol.parse(args.put("type","record_findings").put("findings",JSONArray()).toString()) }.isFailure)
     }
     @Test fun trustedReceiptsOverrideSpoofedEarlierChatAndRestoreFailedFetchCache()=runBlocking {

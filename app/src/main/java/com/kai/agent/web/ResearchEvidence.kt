@@ -75,68 +75,61 @@ data class ResearchEvidence(val receipts: List<ResearchReceipt> = emptyList(), v
         } }
     }
     fun read(entryId: String, offset: Int): String? {
+        val source=if(entryId.startsWith("source:")) sources.firstOrNull { "source:${it.id}"==entryId } else null
         val value: String = when {
             entryId=="research" -> JSONObject().put("sources",JSONArray(sources.map(::sourceJson)))
                 .put("failedOrOffTopicReads",JSONArray(receipts.filter { JSONObject(it.result).optString("status")!="ok" }.map { r ->
                     val o=JSONObject(r.result);JSONObject().put("kind",o.getString("kind")).put("url",o.optString("requestedUrl")).put("status",o.optString("status")).put("code",o.optString("code"))
                 })).put("legacyUnattributed",legacy).toString()
             entryId=="findings" -> JSONArray(findings.map(::findingJson)).toString()
-            entryId.startsWith("source:") -> sources.firstOrNull { it.id==entryId.removePrefix("source:") }?.let { sourceJson(it).put("text",it.text).toString() }
-                ?: return JSONObject().put("status","NOT_FOUND").toString()
+            source!=null -> source.text
+            entryId.startsWith("source:") -> return JSONObject().put("status","NOT_FOUND").put("indexEntryId","research").toString()
             else -> return null
         }
         val from=offset.coerceIn(0,value.length);val end=minOf(from+4000,value.length)
-        return JSONObject().put("source","phone_research_evidence").put("entryId",entryId).put("offset",from).put("totalCharacters",value.length)
-            .put("excerpt",value.substring(from,end)).put("nextOffset",if(end<value.length) end else JSONObject.NULL)
-            .put("notice",NOTICE).toString()
+        return (source?.let(::sourceJson) ?: JSONObject()).put("source","phone_research_evidence").put("entryId",entryId)
+            .put("offset",from).put("totalCharacters",value.length).put("excerpt",value.substring(from,end))
+            .put("nextOffset",if(end<value.length) end else JSONObject.NULL).put("notice",NOTICE).toString()
     }
-    private fun sourceJson(s: ResearchSource)=JSONObject().put("id",s.id).put("url",s.url).put("title",s.title).put("kind",s.kind.name)
+    private fun sourceJson(s: ResearchSource)=JSONObject().put("id",s.id).put("entryId","source:${s.id}").put("url",s.url).put("title",s.title).put("kind",s.kind.name)
         .put("truncated",s.truncated).put("observedAt",s.at).put("newerPageRequest",superseded(s))
     private fun findingJson(f: ResearchFinding)=JSONObject().put("id",f.id).put("claim",f.claim).put("sourceId",f.sourceId).put("quote",f.quote)
         .put("at",f.at).put("quoteLocated",true).put("claimVerified",false).put("newerPageRequest",superseded(sources.first { it.id==f.sourceId }))
-    /** Compact canonical claims, not a moving window containing only the last four findings. */
+    /** Fetched text is the working material, even before any optional legacy notes exist. */
     fun context(): String {
-        val rows=findings.distinctBy { it.sourceId to claimKey(it.claim) }.take(48).toMutableList()
-        var extras=sources.takeLast(4)
-        fun json(): JSONObject {
-            val referenced=rows.map { it.sourceId }.toSet()
-            val shown=(sources.filter { it.id in referenced }+extras).distinctBy { it.id }
-            return JSONObject().put("source","phone_research_index").put("sourceCount",sources.size).put("findingCount",findings.size)
-                .put("sources",JSONArray(shown.map { sourceJson(it).apply { remove("title") } }))
-                .put("findings",JSONArray(rows.map { JSONObject().put("id",it.id).put("claim",it.claim).put("sourceId",it.sourceId) }))
-                .put("omittedFindings",findings.size-rows.size)
-                .put("instructions","Use retained claims to draft the requested output with source URLs. read_context research/findings/source:ID retrieves exact records and omitted findings. record_findings saves only new attributions. Search snippets are not page reads. $NOTICE")
-        }
-        while(json().toString().toByteArray().size>9000 && (rows.isNotEmpty() || extras.isNotEmpty())) {
-            if(extras.isNotEmpty()) extras=extras.drop(1) else rows.removeAt(rows.lastIndex)
+        val selected=sources.sortedWith(compareBy<ResearchSource> { it.kind!=SourceKind.PAGE_EXCERPT }.thenByDescending { it.receipt })
+            .take(8).toMutableList()
+        val notes=findings.distinctBy { it.sourceId to claimKey(it.claim) }.takeLast(12).toMutableList()
+        var firstLimit=6000
+        fun json()=JSONObject().put("source","phone_research_index").put("sourceCount",sources.size).put("findingCount",findings.size)
+            .put("sources",JSONArray(selected.mapIndexed { i,s -> sourceJson(s).put("excerpt",s.text.take(if(i==0) firstLimit else 600))
+                .put("excerptTruncated",s.text.length>(if(i==0) firstLimit else 600)) }))
+            .put("findings",JSONArray(notes.map { JSONObject().put("id",it.id).put("claim",it.claim).put("sourceId",it.sourceId) }))
+            .put("omittedSources",sources.size-selected.size).put("omittedFindings",findings.size-notes.size)
+            .put("instructions","Fetched sources are saved automatically. Draft from these excerpts with relevant source URLs. To read more, call read_context with one exact entryId shown on a source and follow nextOffset. entryId=research lists all sources; entryId=findings reads older saved notes. $NOTICE")
+        while(json().toString().toByteArray().size>9000) {
+            when {
+                selected.size>1 -> selected.removeAt(selected.lastIndex)
+                notes.isNotEmpty() -> notes.removeAt(0)
+                firstLimit>0 -> firstLimit=(firstLimit-300).coerceAtLeast(0)
+                else -> break
+            }
         }
         return json().toString()
     }
     fun receiptContext(requestKey: String): String {
         val receipt=receipts.firstOrNull { JSONObject(it.result).optString("requestKey")==requestKey }
-        return JSONObject().put("source","phone_research_receipt").put("sourceCount",sources.size).put("findingCount",findings.size)
+        return JSONObject().put("source","phone_research_receipt").put("sourceCount",sources.size)
             .put("sources",JSONArray(sources.filter { it.receipt==receipt?.id }.map(::sourceJson)))
-            .put("instructions","Use these source IDs with exact quotes. read_context research/findings/source:ID retrieves saved evidence. $NOTICE").toString()
+            .put("instructions","Sources are saved automatically. Use the fetched text for the requested output. read_context accepts one exact entryId shown on a source; follow nextOffset for more. $NOTICE").toString()
     }
     fun reviewSummary(): String {
         if(receipts.isEmpty()) return if(legacy) "Earlier research has no source receipts from this version." else ""
         val pages=sources.filter { it.kind==SourceKind.PAGE_EXCERPT }.map { it.url }.distinct().size
         val snippets=sources.filter { it.kind==SourceKind.SEARCH_SNIPPET }.map { it.url }.distinct().size
         val stale=findings.count { f -> superseded(sources.first { it.id==f.sourceId }) }
-        return "Research evidence: $pages page excerpts, $snippets search-result excerpts, ${findings.size} quoted findings. Quotations were located in captured text; factual accuracy and coverage still need review."+
+        return "Saved research: $pages page excerpts, $snippets search-result excerpts. Factual accuracy and coverage still need review."+
             if(stale>0) " $stale findings have a newer page request; check the latest evidence." else ""
-    }
-    /** Checks reference provenance and a minimal attribution floor, never semantic truth. */
-    fun review(text: String, requireAttribution: Boolean, additionalUrls: Set<String> = emptySet()): String? {
-        if(rawUrls(text).any { runCatching { canonical(it) }.isFailure }) return "Use retrieved public HTTPS references; this draft contains an unsupported or invalid reference."
-        val cited=urls(text)
-        val allowed=knownUrls+additionalUrls.mapNotNull { runCatching { canonical(it) }.getOrNull() }
-        if(cited.any { it !in allowed }) return "A proposed URL has no user, retrieval, navigation or service receipt in this run. Search/read its reference first or remove it. Never invent source links."
-        if(!requireAttribution) return null
-        val current=findings.filter { f -> sources.first { it.id==f.sourceId }.let { !superseded(it) } }
-        if(current.isEmpty()) return "Record source-attributed findings before preparing the researched document or final research answer. Use record_findings with a source ID, a short claim, and an exact quotation from its excerpt. Do not claim the quotation verifies the claim."
-        if(current.none { f -> sources.first { it.id==f.sourceId }.url in cited }) return "Cite the source URLs for the recorded findings in the researched body. A navigation link or service document URL does not replace a supporting source citation."
-        return null
     }
     fun validate() {
         require(receipts.size<=128 && findings.size<=96 && corrections in 0..10000 && characters<=900_000)

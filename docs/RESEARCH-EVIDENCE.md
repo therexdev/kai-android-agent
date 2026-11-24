@@ -1,5 +1,7 @@
 # Saved research evidence (0.5.5)
 
+> Historical 0.5.5 design. In 0.5.7, mandatory finding/citation gates and automatic collection/stalled-run stops are retired; cached reads again return content and canonical context includes fetched text. The current contract and compatibility limits are in [Research execution simplification](RESEARCH-EXECUTION-SIMPLIFICATION.md).
+
 KAI now stores phone-produced public web receipts separately from model conversation text. Each source has a run-local ID, URL, observation time and captured excerpt. Search snippets, extracted page text and unread navigation links have different meanings. A page receipt proves only that the shown excerpt was returned, not that KAI reviewed every part of the page.
 
 The native and JSON agent protocols expose `record_findings`: one to twelve model-authored claims with exact quotations from those excerpts. The phone rejects unknown source IDs and quotations absent from the source. A batch commits atomically. Quote matching establishes attribution; it does not establish entailment, truth, complete coverage, freshness or independent corroboration. A later page request, including a failure through a known redirect alias, makes older findings from that source ineligible for the citation check.

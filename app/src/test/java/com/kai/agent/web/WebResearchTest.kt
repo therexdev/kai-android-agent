@@ -160,7 +160,7 @@ class WebResearchTest {
         assertFalse(result.has("topicMatch"));assertTrue(session.hasEvidence)
     }
 
-    @Test fun referenceProvenanceIsCheckedInTheSharedEvidenceLayerForEveryTopic() = runBlocking {
+    @Test fun sourceAndNavigationProvenanceIsRetainedForEveryTopic() = runBlocking {
         for(topic in listOf("Koinos projects","garden projects")) {
             var evidence=ResearchEvidence()
             val quote="The directory describes a community project."
@@ -168,8 +168,8 @@ class WebResearchTest {
             val session=WebResearchSession("Research $topic https://source.example/",c,onResult={ evidence=evidence.append(it,1);evidence.receiptContext(it.optString("requestKey")) })
             session.execute(AgentDecision.ReadWebPage("https://source.example/"))
             evidence=evidence.record(listOf(FindingProposal("A community project.","s1_0",quote)),2)
-            assertNull(evidence.review("A project https://project.example/ from https://source.example/",true))
-            assertNotNull(evidence.review("A project https://invented.example/ from https://source.example/",true))
+            assertTrue("https://project.example/" in evidence.knownUrls)
+            assertFalse("https://invented.example/" in evidence.knownUrls)
         }
     }
 }

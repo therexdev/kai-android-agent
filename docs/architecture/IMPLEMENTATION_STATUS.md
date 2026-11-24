@@ -4,17 +4,15 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
-## Shared progress control (0.5.6)
+## Research execution correction (0.5.7)
 
-The supplied 0.5.5 report retained the original goal but showed repeated cached reads, searches offered after exhaustion, duplicate attributions and unusable summary attempts before an upstream 502. KAI-029/031/034 now have shared run-owned enforcement: durable normalized outcome signatures, independent capability admission, collection closure and completion reserves, canonical claim projection and thin cached pointers. Chat, saved tasks and routines use the same controls through both wire protocols; exact effect authority remains separate. The measured checks and retained-trace replay are in `qa/0.5.6/VALIDATION.md`.
+The complete 0.5.6 report showed a regression before any action proposal: one invalid quotation rejected a batch of findings; canonical projection then omitted fetched page text because no findings existed; cached reads returned ambiguous pointers; repeated failed retrieval led the new progress controller to close collection and stop. A later answer-only request also omitted native protocol 2. These were application contract defects, separate from the earlier upstream 502.
 
-This closes bounded implementation defects, not every acceptance criterion. The controls recognize repeated/failed results, not semantic novelty. Research coverage, factual verification, full wall-clock accounting and live upstream availability remain unfinished. Existing records are retained without rewriting their claims or historical source classifications. Physical-device execution remains a separate gate. `AGENTS.md` now requires report-to-contract diagnosis, an audit of all callers and adjacent-workflow regression evidence for future fixes; see `docs/SHARED-PROGRESS-CONTROL.md`.
+0.5.7 removes mandatory quote/citation review, collection closure, completion reserves and the six-result stop from both execution adapters. Source receipts remain authoritative for retrieval, but quotes are no longer a prerequisite for drafting. Bounded canonical context includes fetched text with zero findings; cached reads return content and exact source entry IDs page the originals. Legacy findings/progress data remain strictly readable without controlling new admission. Native managed follow-ups carry protocol 2 even with an empty tool list.
 
-## Saved source attribution (0.5.5)
+KAI-028/032 remain partial: stored excerpts and historical attributions do not verify claims or coverage. KAI-029/031 are now explicitly partial: request caching, independent network limits, durable inference/run allowances and explicit continuation remain, but semantic convergence and guaranteed completion are not implemented. KAI-034 retains bounded projection/retrieval with the corrected source working set. The original acceptance criteria are unchanged in the CSV.
 
-KAI-028/032 now retain phone-produced retrieval receipts, run-local source IDs and exact-quote findings separately from model text. Chat and saved tasks share encrypted persistence, paged source retrieval, trusted cache restoration and bounded citation correction. Source snippets, page excerpts and navigation links stay distinct. New Google Docs research bodies and final plain research answers require a current quoted finding and a cited source URL; exact write approval still applies.
-
-This is a minimal attribution floor, not semantic verification or complete coverage. Other service bodies, per-claim coverage, independent corroboration and freshness remain unfinished. Both roadmap items stay partial. Older archives are retained without being promoted to trusted receipts. See `docs/RESEARCH-EVIDENCE.md` and `qa/0.5.5/VALIDATION.md` for boundaries and measured checks.
+The scripted document-only and document-plus-email component scenarios exercise both protocols, all run origins and compaction/resume with exact approval and read-back checks. Private replay confirms the failing report's full directory excerpt now survives canonical projection with zero saved findings. These checks do not instantiate every Android adapter or call live providers/services. Device execution and live original-request completion remain open. See `qa/0.5.7/VALIDATION.md` and `docs/RESEARCH-EXECUTION-SIMPLIFICATION.md`; earlier design documents are historical.
 
 ## Shared inference allowances and field regressions (0.5.4)
 
@@ -61,7 +59,7 @@ Questions, partial outcomes, waiting approval, pause and failure are separate st
 
 ## Scope and unfinished work
 
-Status counts: {"implemented": 23, "partial": 27, "gated": 1, "planned": 13}. These are inventory counts, not percentage completion or proof that a whole acceptance criterion passed.
+Status counts: {"implemented": 21, "partial": 30, "gated": 1, "planned": 12}. These are inventory counts, not percentage completion or proof that a whole acceptance criterion passed.
 
 The largest unfinished prerequisites are authoritative credit settlement and complete wall-clock/tool accounting across all background work, claim-level source assurance, general provider replay formats and wider route qualification, additional read-back adapters, independent-read concurrency, a complete typed voice reducer, and modern physical Android lifecycle validation. Managed GPT OSS continuation/activation and the user-confirmed document scenario now have bounded live evidence; they do not close those broader requirements. These must precede a production-ready claim.
 

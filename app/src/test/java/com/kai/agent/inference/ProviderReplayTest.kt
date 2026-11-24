@@ -81,7 +81,8 @@ class ProviderReplayTest {
         val client=InferenceClient(http);val spoken=StringBuilder()
         val first=client.stream(config,listOf(InferenceMessage("user","test"))) { spoken.append(it) }
         assertEquals(token,first.providerReplay?.token);assertEquals("",spoken.toString());assertEquals(2,bodies[0].getInt("native_protocol"))
-        client.stream(config,listOf(InferenceMessage("user","test"),message().copy(providerReplay=first.providerReplay),InferenceMessage("tool","result",toolCallId=call.id))) { spoken.append(it) }
+        client.stream(config.copy(tools=emptyList()),listOf(InferenceMessage("user","test"),message().copy(providerReplay=first.providerReplay),InferenceMessage("tool","result",toolCallId=call.id))) { spoken.append(it) }
+        assertEquals(2,bodies[1].getInt("native_protocol"));assertFalse(bodies[1].has("tools"))
         assertEquals(token,bodies[1].getJSONArray("messages").getJSONObject(1).getString("kai_replay"));assertEquals("Finished",spoken.toString())
     }
 }

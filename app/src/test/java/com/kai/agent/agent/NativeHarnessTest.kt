@@ -79,17 +79,14 @@ class NativeHarnessTest {
         assertTrue(restored.checkpoint().contains("real research"));assertFalse(restored.checkpoint().contains("private memory"))
     }
 
-    @Test fun repeatProgressIsRunOwnedAndIndependentOfTheWireParser() {
+    @Test fun parserDoesNotForbidRereadingRetainedContent() {
         val proposal=Completion("""{"type":"read_context","entryId":"findings"}""","stop")
         val harness=AgentHarness(false)
-        var progress=com.kai.agent.runtime.RunProgress()
         repeat(7) {
             val decision=harness.parse(proposal,AgentResponseRecovery())
-            progress=progress.observe(decision,"Same result")
+            assertTrue(decision is AgentDecision.ReadContext)
             harness.exchange(proposal.text,"Same result")
         }
-        assertEquals(6,progress.stalled)
-        assertEquals(0,progress.observe(AgentDecision.ReadContext("findings"),"New findings").stalled)
     }
 
     @Test fun deferredRegistryBudgetIncludesDescriptionsAndUtf8SchemaBytes() {

@@ -1,0 +1,23 @@
+{
+  "source": "User-provided 0.5.6 Android report; private contents excluded",
+  "result": "PASS",
+  "assertions": [
+    "Retained complete 207-event trace has zero dropped events",
+    "Legacy rejected finding batch leaves zero saved findings",
+    "After serialization, the complete 5644-character directory excerpt remains in canonical context",
+    "Every retained source is recoverable through its exact entry ID and offset pages",
+    "Canonical context remains within 9000 UTF-8 bytes"
+  ],
+  "limitations": [
+    "Offline reconstruction of diagnostically escaped receipts; no production state import",
+    "Not a new model execution or proof of Android adapter or live document/email behavior",
+    "Native protocol and run admission are checked separately in synthetic regression tests"
+  ],
+  "live_calls_made": 0,
+  "source_sha256": {
+    "web/ResearchEvidence.kt": "5706bfeb04eb35507a476135d61db290bbf68eb2c706073d3af4e8ffaf1a193a",
+    "runtime/RunController.kt": "b3a25d210dc7dd0a904fa27609ba9fb14a54b0d2856683642b22b3348e2ffb40",
+    "inference/InferenceClient.kt": "64cc01705f054ab23c54b1595afe9de8e96c57b6967a4af00fa5cd6b9116a932"
+  },
+  "compiled_bytecode_replay": "PASS"
+}
