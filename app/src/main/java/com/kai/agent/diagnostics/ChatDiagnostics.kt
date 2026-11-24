@@ -45,7 +45,7 @@ class DiagnosticRedactor(settings: AppSettings) {
         return when (value) {
             null, JSONObject.NULL -> JSONObject.NULL
             is JSONObject -> JSONObject().also { result -> value.keys().forEach { key ->
-                result.put(text(key), if(sensitive(key)) "[credential-removed]" else clean(value.opt(key), depth + 1))
+                result.put(text(key), if(key=="contextArchive") "[encrypted task archive omitted from report]" else if(sensitive(key)) "[credential-removed]" else clean(value.opt(key), depth + 1))
             } }
             is JSONArray -> JSONArray().also { result -> for(i in 0 until minOf(value.length(), 2000)) result.put(clean(value.opt(i), depth + 1))
                 if(value.length() > 2000) result.put(JSONObject().put("omittedItems", value.length()-2000)) }

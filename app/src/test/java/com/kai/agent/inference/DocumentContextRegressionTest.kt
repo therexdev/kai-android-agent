@@ -53,6 +53,15 @@ class DocumentContextRegressionTest {
         assertTrue(InferenceBudget.estimate(prepared.messages) + prepared.outputTokens + 512 <= 4096)
         println("Populated document flow: prompt=" + InferenceBudget.estimate(prepared.messages) + ", output=" + prepared.outputTokens)
         assertTrue(prepared.outputTokens >= 512)
+        val managed=kotlinx.coroutines.runBlocking {
+            AgentContextManager().prepare(AgentTurnContext.fromMessages(context.messages()),config,
+                summarize={ _,_ -> Completion("Earlier discovery remains in the archive.","stop") })
+        }
+        val continued=InferenceBudget.prepare(config,managed)
+        assertTrue(continued.messages.first().content.contains(ledger))
+        assertEquals(schema.full,continued.messages.last().content)
+        assertTrue(continued.messages.any { it.content==request })
+        assertTrue(continued.outputTokens>=512)
     }
 
     @Test fun optionalMemoryFallbackPreservesCurrentSaveAndClarification() {

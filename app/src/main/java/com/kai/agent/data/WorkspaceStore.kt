@@ -180,7 +180,7 @@ suspend fun KaiStore.deleteProject(id: String) = change { state ->
     val tasks=state.tasks.mapNotNull { task ->
         if(task.runId !in runIds && task.conversationId !in conversationIds) task
         else if(task.submittedAt==null) null
-        else task.copy(instructions="",resultContext="") // Keep exact submission/receipt evidence for reconciliation.
+        else task.copy(instructions="",resultContext="",contextArchive="") // Keep exact submission/receipt evidence for reconciliation.
     }
     state.copy(projects=state.projects.filterNot { it.id==id },deletedProjectIds=(state.deletedProjectIds+id).distinct(),
         documents=state.documents.filterNot { it.projectId==id },deletedDocumentIds=(state.deletedDocumentIds+state.documents.filter { it.projectId==id }.map { it.id }).distinct(),
@@ -201,21 +201,21 @@ suspend fun KaiStore.directRun(id: String, text: String): AgentRun = change { st
         TaskRules.transition(it,TaskStatus.CANCELLED,state.settings,"Superseded by your new directions") else it }
     val instructions=step.instructions+"\nAdditional directions from you: "+text.trim()
     require(instructions.length<=12000) { "These directions are too long. Start a smaller task." }
-    val updated=step.copy(instructions=instructions,messages=emptyList(),tools=emptyList(),pendingActionId="",turns=0)
+    val updated=step.copy(instructions=instructions,messages=emptyList(),contextSummary="",tools=emptyList(),pendingActionId="",turns=0)
     val next=run.copy(steps=run.steps.map { if(it.id==step.id)updated else it },status=RunStatus.QUEUED,lease="",detail="Continuing with your directions",updatedAt=now())
     val conversations=state.conversations.map { if(it.id==run.conversationId)it.copy(messages=it.messages+ChatMessage(role="user",text=text.trim()),updatedAt=now()) else it }
     withRun(state.copy(tasks=tasks,conversations=conversations),next) to next
 }
 
 /** Checkpoint belongs to the same exact unsubmitted action and current connection owner. */
-suspend fun KaiStore.saveActionCheckpoint(id: String, checkpoint: String, expectedRevision: Long): AgentTask = change { state ->
-    require(checkpoint.length <= 64_000)
+suspend fun KaiStore.saveActionCheckpoint(id: String, checkpoint: String, expectedRevision: Long, archive: String = ""): AgentTask = change { state ->
+    require(checkpoint.length <= 64_000 && archive.length <= 2_000_000)
     val task=state.tasks.first { it.id==id }
     require(task.submittedAt==null && task.status==TaskStatus.AWAITING_APPROVAL)
     val conversation=state.conversations.first { it.id==task.conversationId }
     require(WorkspaceRules.contextRevision(state,conversation.projectId,conversation.id)==expectedRevision) { "Context changed; prepare a fresh action." }
     require(task.createdAt>conversation.contextAfter && task.createdAt>(state.projects.firstOrNull { it.id==conversation.projectId }?.forgottenBefore ?: 0))
     TaskRules.validateBinding(requireNotNull(task.intent),state.settings)
-    val next=task.copy(resultContext=org.json.JSONObject().put("checkpoint",org.json.JSONArray(checkpoint)).toString())
+    val next=task.copy(resultContext=org.json.JSONObject().put("checkpoint",org.json.JSONArray(checkpoint)).toString(),contextArchive=archive)
     state.copy(tasks=state.tasks.map { if(it.id==id) next else it }) to next
 }

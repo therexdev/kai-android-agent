@@ -79,7 +79,7 @@ class TaskAgentEngine(
             .put("runId",runId).put("stepId",current().currentStep?.id.orEmpty()).put("modelProposal",assistant).put("result",runtime))
         editStep { step ->
             val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId) }
-            require(messages.sumOf { it.content.length }<=56000) { "This step reached its context limit. Pause and split the task into smaller steps." }
+            require(messages.sumOf { it.content.length.toLong() }<=1_000_000) { "This task’s saved records are full. Existing action receipts remain in Tasks." }
             step.copy(messages=messages,tools=(step.tools+tools).distinctBy { it.accountId+":"+it.toolId }.takeLast(100))
         }
     }
@@ -113,6 +113,9 @@ class TaskAgentEngine(
             }
             val toolRecovery = AgentToolRecovery()
             val documentGuards=mutableMapOf<String,DocumentContentGuard>()
+            var contextManager=AgentContextManager()
+            var managedRevision: Long?=null
+            var managedStep=""
             while(true) {
                 currentCoroutineContext().ensureActive()
                 var run=current();var step=run.currentStep ?: return hold(RunStatus.COMPLETED,"Finished")
@@ -130,16 +133,30 @@ class TaskAgentEngine(
                 run=current();step=requireNotNull(run.currentStep)
                 val contextRevision=revision(run)
                 if(step.messages.isEmpty() || step.contextRevision!=contextRevision) {
-                    run=editStep { it.copy(messages=prompt(run,it),tools=emptyList(),contextRevision=contextRevision,status=StepStatus.RUNNING) }
+                    run=editStep { it.copy(messages=prompt(run,it),tools=emptyList(),contextSummary="",contextRevision=contextRevision,status=StepStatus.RUNNING) }
                     step=requireNotNull(run.currentStep)
                 }
                 require(step.turns<24) { "This step reached its 24-turn limit. Review its receipts, then skip it or create a smaller task." }
                 editStep { it.copy(turns=it.turns+1) }
                 trace?.record("saved_step",JSONObject().put("runId",id).put("stepId",step.id).put("turn",step.turns))
                 val nativeConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to connections.tool(it.toolId,it.version) })
-                val completion=withTimeout(minOf(InferenceTimeoutPolicy.taskTurnMillis(nativeConfig.provider),(timeBudgetMillis-(android.os.SystemClock.elapsedRealtime()-started)).coerceAtLeast(1))) {
-                    complete(nativeConfig,step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) })
+                if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
+                contextManager.restoreSummary(step.contextSummary)
+                val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) })
+                val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> complete(c,m) },onChange={ change ->
+                    currentCoroutineContext().ensureActive()
+                    trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
+                    store.editRun(id,token) { it.copy(detail="Optimizing context…") }
+                })
+                if(revision(current())!=contextRevision) continue
+                editStep { if(it.contextRevision==contextRevision) it.copy(contextSummary=contextManager.summaryCheckpoint()) else it }
+                val completion=try { withTimeout(minOf(InferenceTimeoutPolicy.taskTurnMillis(nativeConfig.provider),(timeBudgetMillis-(android.os.SystemClock.elapsedRealtime()-started)).coerceAtLeast(1))) {
+                    complete(nativeConfig,working)
+                } } catch(error: InferenceException) {
+                    if(contextManager.recover(error)) { trace?.record("context_overflow_recovery");continue }
+                    throw error
                 }
+                contextManager.observe(completion)
                 current()
                 if(revision(current())!=contextRevision) continue // A forget/edit wins over a stale model response.
                 val question=runCatching { JSONObject(completion.text).takeIf { it.optString("type")=="needs_input" }?.getString("text") }.getOrNull()
@@ -189,6 +206,7 @@ class TaskAgentEngine(
                     continue
                 }
                 when(decision) {
+                    is AgentDecision.ReadContext -> append(completion.text,TaskContextArchive.read(turnContext,decision.entryId,decision.offset,store.state.value.tasks,run.conversationId,boundary,store.state.value.settings.composioUserId,store.state.value.settings.connectionGeneration,current()))
                     is AgentDecision.SearchMemory, is AgentDecision.ProposeMemory -> return hold(RunStatus.BLOCKED,"Open a conversation to look up or save personal memories.")
                     is AgentDecision.WebSearch, is AgentDecision.ReadWebPage -> append(completion.text,web.execute(decision))
                     is AgentDecision.Reply -> {

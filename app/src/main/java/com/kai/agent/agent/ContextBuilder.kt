@@ -24,10 +24,10 @@ object ContextBuilder {
         suppressedMessageIds: Set<String> = emptySet(),
         maxCharacters: Int = 28_000,
         maxMessages: Int = 24,
-        afterTimestamp: Long = 0,
+        afterTimestamp: Long = 0, managed: Boolean = false,
     ): List<InferenceMessage> {
         require(maxCharacters in 2_000..100_000 && maxMessages in 1..99) { "Invalid context budget." }
-        require(systemPrompt.length < maxCharacters) { "Connected-tool context is too large. Use a more specific request." }
+        require(managed || systemPrompt.length < maxCharacters) { "Connected-tool context is too large. Use a more specific request." }
         val remaining = maxCharacters - systemPrompt.length
         val eligible = messages.filter { it.createdAt >= afterTimestamp && it.id !in suppressedMessageIds && it.role in setOf("user", "assistant") }
             .mapNotNull { message ->
@@ -37,9 +37,10 @@ object ContextBuilder {
                 content.takeIf { it.isNotBlank() }?.let { InferenceMessage(message.role, it) }
             }
         val latestUser = eligible.indexOfLast { it.role == "user" }
-        if (latestUser >= 0) require(eligible[latestUser].content.length <= remaining) {
+        if (!managed && latestUser >= 0) require(eligible[latestUser].content.length <= remaining) {
             "Your message is too long for this context. Split it into smaller parts."
         }
+        if(managed) return listOf(InferenceMessage("system",systemPrompt))+eligible.mapIndexed { index,item -> item.copy(canOmit=index<latestUser) }
         val selected = mutableListOf<InferenceMessage>()
         var used = 0
         for (index in eligible.indices.reversed()) {

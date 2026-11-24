@@ -213,6 +213,7 @@ data class AgentTask(
     val conversationId: String = "",
     val runId: String = "",
     val resultContext: String = "",
+    val contextArchive: String = "",
 )
 
 internal fun newId(): String = UUID.randomUUID().toString()

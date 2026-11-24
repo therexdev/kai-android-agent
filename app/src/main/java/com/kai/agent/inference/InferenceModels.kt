@@ -47,4 +47,4 @@ sealed interface StreamEvent {
     data class Finished(val finishReason: String?, val usage: TokenUsage?, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList()) : StreamEvent
 }
 
-class InferenceException(message: String, val httpStatus: Int? = null) : Exception(message)
+class InferenceException(message: String, val httpStatus: Int? = null, val contextOverflow: Boolean = false) : Exception(message)

@@ -4,13 +4,14 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Update prepared: 0.4.31
+## Update prepared: 0.4.32
 
+- Chat and saved tasks now manage context automatically: prune older tool catalogs, summarize older work when needed, retain recent exchanges and retrieve archived details on demand. Approval resumes use a bounded model view instead of inserting the full saved transcript into the prompt. Exact action receipts and duplicate-write guards stay on the phone.
 - One generic native tool harness serves chat and saved tasks. Discovered actions use their exact schemas and connected accounts; approval and execution remain on the phone. Native calling activates only when the authenticated model catalog advertises support. Older gateways retain the bounded JSON protocol.
 - Approval retains the earlier research results. Document receipts preserve returned URLs, link follow-ups reuse existing resources, and duplicate or uncertain creations cannot be replayed automatically.
 - Research document creation checks the body before review, then requests readback or reports that contents remain unverified. Public page reads retain real outgoing links, and Koinos ecosystem research keeps its blockchain context.
 - Includes 0.4.30 response recovery and voice interruption fixes. Physical-phone audio still requires validation.
-- Gateway transport and activation instructions: [credits PR #107](https://github.com/therexdev/kai/pull/107). Native calling is not active on production merely by installing this APK. See [validation](qa/0.4.31/VALIDATION.md).
+- Gateway transport and activation instructions: [credits PR #107](https://github.com/therexdev/kai/pull/107). Native calling is not active on production merely by installing this APK. Automatic context management also works with the existing JSON protocol. See [context design](docs/AGENT-CONTEXT.md) and [validation](qa/0.4.32/VALIDATION.md).
 
 ## Account features
 
@@ -48,7 +49,7 @@ The phone owns conversation history, memory, task records, files, and permission
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **38**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **39**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 
@@ -86,6 +87,7 @@ Use JDK 17 or 21, Android SDK platform 36 / build-tools 36.0.0, and the checked-
 - [Memory architecture](docs/MEMORY-ARCHITECTURE.md)
 - [Web research](docs/WEB-RESEARCH-AND-CORE.md)
 - [Chat reports](docs/CHAT-REPORTS.md)
+- [Agent context management](docs/AGENT-CONTEXT.md)
 - [Build history](docs/BUILD-HISTORY.md)
 - [0.4.29 validation](qa/0.4.29/VALIDATION.md)
 

@@ -4,7 +4,7 @@ package com.kai.agent.inference
 object InferenceBudget {
     data class Prepared(val messages: List<InferenceMessage>, val outputTokens: Int)
     fun estimate(messages: List<InferenceMessage>): Int = 32 + messages.sumOf {
-        (it.content.toByteArray(Charsets.UTF_8).size + 2) / 3 + 12 + if(it.toolCalls.isNotEmpty() || it.toolCallId.isNotBlank()) (NativeToolWire.messageJson(it).toString().length-it.content.length+2)/3 else 0
+        (it.content.toByteArray(Charsets.UTF_8).size + 2) / 3 + 12 + if(it.toolCalls.isNotEmpty() || it.toolCallId.isNotBlank()) (NativeToolWire.messageJson(it).toString().toByteArray(Charsets.UTF_8).size-it.content.toByteArray(Charsets.UTF_8).size+2)/3 else 0
     }
     fun prepare(config: ProviderConfig, messages: List<InferenceMessage>, reportedWindow: Int? = null, schemaTokens: Int = 0): Prepared {
         if(config.provider != ProviderId.KOINOS) return Prepared(messages, config.maxOutputTokens.coerceIn(128,8192))

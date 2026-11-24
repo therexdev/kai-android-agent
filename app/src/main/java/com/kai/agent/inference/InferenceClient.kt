@@ -96,6 +96,9 @@ class InferenceClient(client: OkHttpClient? = null,
         return models
     }
 
+    suspend fun agentConfig(config: ProviderConfig): ProviderConfig = if(config.contextTokens!=null || config.provider!=ProviderId.KOINOS || config.accountSession) config
+        else config.copy(contextTokens=contextCapability(config).window ?: 4096)
+
     /** Model discovery is a read-only connection check; no paid generation is hidden in this action. */
     suspend fun testConnection(config: ProviderConfig): ConnectionCheck {
         val models = discoverModels(config)
@@ -447,8 +450,9 @@ class InferenceClient(client: OkHttpClient? = null,
     }
     /** Classify only. Never echo provider text, which may contain credentials or the prompt. */
     private fun classifiedError(body: String, status: Int?): InferenceException {
-        val message = InferenceRejection.describe(body, status) ?: return statusError(status ?: 400)
-        return InferenceException(message,status)
+        val overflow=InferenceRejection.isContextOverflow(body) || status==413
+        val message = InferenceRejection.describe(body, status) ?: if(overflow) "The inference request exceeds the model or gateway context limit." else return statusError(status ?: 400)
+        return InferenceException(message,status,contextOverflow=overflow)
     }
 
     private fun usage(json: JSONObject): TokenUsage? = json.optJSONObject("usage")?.let {

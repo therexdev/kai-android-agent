@@ -12,7 +12,7 @@ data class RunStep(
     val status: StepStatus = StepStatus.PENDING, val output: String = "",
     val messages: List<RunMessage> = emptyList(), val tools: List<RunTool> = emptyList(),
     val pendingActionId: String = "", val turns: Int = 0, val contextRevision: Long = -1,
-    val completedAt: Long = 0,
+    val completedAt: Long = 0, val contextSummary: String = "",
 )
 data class AgentRun(
     val id: String = newId(), val title: String, val goal: String,
@@ -77,9 +77,10 @@ object RunRules {
         require(run.steps.size <= 8 && run.steps.map { it.id }.distinct().size == run.steps.size)
         run.steps.forEach {
             require(it.instructions.isNotBlank() && it.instructions.length <= 12000 && it.title.length <= 200)
-            require(it.output.length <= 24000 && it.messages.sumOf { m -> m.content.length.toLong() } <= 56000)
+            require(it.output.length <= 24000 && it.messages.sumOf { m -> m.content.length.toLong() } <= 1_000_000)
             require(it.messages.all { m -> m.role in setOf("system", "user", "assistant", "tool") })
             com.kai.agent.inference.NativeToolWire.validate(it.messages.map { m -> com.kai.agent.inference.InferenceMessage(m.role,m.content,toolCalls=m.toolCalls,toolCallId=m.toolCallId) },true,allowPending=it.pendingActionId.isNotBlank())
+            require(it.contextSummary.length<=8000)
             require(it.tools.size <= 100 && it.turns in 0..24)
         }
     }

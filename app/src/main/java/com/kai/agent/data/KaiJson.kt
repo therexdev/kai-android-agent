@@ -139,11 +139,11 @@ object KaiJson {
         .put("status", t.status.name).put("createdAt", t.createdAt).put("updatedAt", t.updatedAt)
         .put("intent", t.intent?.let(::intent) ?: JSONObject.NULL).put("approvedFingerprint", t.approvedFingerprint)
         .put("approvedAt", t.approvedAt ?: JSONObject.NULL).put("submittedAt", t.submittedAt ?: JSONObject.NULL)
-        .put("receipts", array(t.receipts.map(::receipt))).put("events", array(t.events.map(::event))).put("lastError", t.lastError).put("conversationId", t.conversationId).put("runId",t.runId).put("resultContext",t.resultContext)
+        .put("receipts", array(t.receipts.map(::receipt))).put("events", array(t.events.map(::event))).put("lastError", t.lastError).put("conversationId", t.conversationId).put("runId",t.runId).put("resultContext",t.resultContext).put("contextArchive",t.contextArchive)
     private fun readTask(o: JSONObject) = AgentTask(o.getString("id"), o.getString("title"), o.optString("instructions"),
         enumValueOf(o.getString("status")), o.getLong("createdAt"), o.getLong("updatedAt"),
         o.optJSONObject("intent")?.let(::readIntent), o.optString("approvedFingerprint"),
         if (o.isNull("approvedAt")) null else o.getLong("approvedAt"),
         if (o.isNull("submittedAt")) null else o.getLong("submittedAt"),
-        objects(o, "receipts").map(::readReceipt), objects(o, "events").map(::readEvent), o.optString("lastError"), o.optString("conversationId"), o.optString("runId"), o.optString("resultContext"))
+        objects(o, "receipts").map(::readReceipt), objects(o, "events").map(::readEvent), o.optString("lastError"), o.optString("conversationId"), o.optString("runId"), o.optString("resultContext"), o.optString("contextArchive"))
 }

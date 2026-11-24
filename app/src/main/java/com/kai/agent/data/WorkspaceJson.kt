@@ -21,13 +21,13 @@ internal object WorkspaceJson {
         deletedProjectIds = strings(root,"deletedProjectIds"), deletedDocumentIds = strings(root,"deletedDocumentIds"))
     private fun step(s: RunStep) = JSONObject().put("id",s.id).put("title",s.title).put("instructions",s.instructions)
         .put("status",s.status.name).put("output",s.output).put("pendingActionId",s.pendingActionId)
-        .put("turns",s.turns).put("contextRevision",s.contextRevision).put("completedAt",s.completedAt)
+        .put("turns",s.turns).put("contextRevision",s.contextRevision).put("completedAt",s.completedAt).put("contextSummary",s.contextSummary)
         .put("messages",array(s.messages.map { com.kai.agent.inference.NativeToolWire.messageJson(com.kai.agent.inference.InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId)) }))
         .put("tools",array(s.tools.map { JSONObject().put("accountId",it.accountId).put("toolId",it.toolId).put("version",it.version) }))
     private fun readStep(o: JSONObject) = RunStep(o.getString("id"),o.getString("title"),o.getString("instructions"),
         enumValueOf(o.getString("status")),o.optString("output"),objects(o,"messages").map { RunMessage(it.getString("role"),it.getString("content"), com.kai.agent.inference.NativeToolWire.Accumulator().apply { add(it.optJSONArray("tool_calls"),false) }.finish(),it.optString("tool_call_id")) },
         objects(o,"tools").map { RunTool(it.getString("accountId"),it.getString("toolId"),it.getString("version")) },
-        o.optString("pendingActionId"),o.optInt("turns"),o.optLong("contextRevision",-1),o.optLong("completedAt"))
+        o.optString("pendingActionId"),o.optInt("turns"),o.optLong("contextRevision",-1),o.optLong("completedAt"),o.optString("contextSummary"))
     private fun run(r: AgentRun) = JSONObject().put("id",r.id).put("title",r.title).put("goal",r.goal)
         .put("projectId",r.projectId).put("characterId",r.characterId).put("conversationId",r.conversationId)
         .put("status",r.status.name).put("steps",array(r.steps.map(::step))).put("lease",r.lease)
