@@ -10,6 +10,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatDiagnosticsTest {
+    @Test fun htmlErrorPagesCannotLeakNetworkDetailsIntoStoredDiagnosticsOrExports() {
+        val redactor=DiagnosticRedactor(AppSettings())
+        val raw=JSONObject().put("httpStatus",502).put("requestId","fixture-request")
+            .put("errorBody","<!DOCTYPE html><html><body>Your IP: 2001:db8::1 user: fixture@example.test</body></html>")
+        val cleaned=redactor.event(raw)
+        assertFalse(cleaned.contains("2001:db8"));assertFalse(cleaned.contains("fixture@example.test"))
+        assertEquals(502,JSONObject(cleaned).getInt("httpStatus"))
+        assertEquals("fixture-request",JSONObject(cleaned).getString("requestId"))
+        assertTrue(cleaned.contains("HTML error page omitted"))
+        assertEquals(cleaned,redactor.event(JSONObject(cleaned)))
+    }
     private val secret="diagnostic-fixture-secret"
     private val settings=AppSettings(koinos=ProviderProfile("https://example.com/r/private-route/v1",secret,"local"),composioApiKey="project-key-fixture")
     private val redactor=DiagnosticRedactor(settings)

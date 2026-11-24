@@ -4,18 +4,19 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.5
+## Test release: 0.5.6
 
-The signed 0.5.5 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.6 test APK is distributed directly. The latest published release remains available above.
 
-- Saves public web receipts and quoted findings in the encrypted run, with separate labels for search snippets, page excerpts and unread navigation links.
-- Restores evidence and failed-read caches after interruption; original source excerpts remain available through context retrieval and the progress panel shows quoted findings.
-- Checks new researched Google Docs bodies and final plain research answers for sourced links and a quoted finding, with two persisted correction opportunities before a partial outcome.
-- Preserves exact write approval, uncertain-outcome protection, shared inference allowances and document read-back checks from earlier updates.
+- Shares durable progress control across chat, saved tasks and routines, including native and JSON tool protocols. Repeated or failed reads cannot gain a fresh allowance by restarting the adapter.
+- Stops exhausted search independently from page reading, closes stalled collection, and reserves remaining run allowance for drafting and reviewed actions.
+- Preserves a bounded canonical view of saved claims and source references; cached pages return retrieval pointers instead of full duplicate copies. Canonical run contexts do not spend model requests on automatic summaries.
+- Removes topic-specific retrieval heuristics and duplicate attributions while retaining exact quotation checks, exact write approval, UNKNOWN-outcome protection and document read-back.
+- Filters HTML gateway error bodies from diagnostics while retaining the HTTP failure classification.
 
-Quote matching establishes attribution only. Full claim coverage and factual verification remain unfinished. See [research evidence](docs/RESEARCH-EVIDENCE.md), [run allowances](docs/RUN-ALLOWANCES.md), [validation](qa/0.5.5/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
+These controls measure repeated/failed work; they do not verify semantic novelty, full research coverage or factual accuracy. The observed upstream HTTP 502 has a separate server-side cause that this app update does not establish or repair. See [shared progress control](docs/SHARED-PROGRESS-CONTROL.md), [validation](qa/0.5.6/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. A physical 0.5.5 test remains a separate gate.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.6 behavior remains a separate validation gate.
 
 ## Account features
 

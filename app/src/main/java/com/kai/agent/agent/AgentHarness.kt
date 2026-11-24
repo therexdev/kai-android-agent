@@ -12,15 +12,15 @@ class AgentHarness(val native: Boolean) {
     private data class Binding(val accountId: String, val tool: ConnectionTool)
     private val bindings = linkedMapOf<String, Binding>()
     private var pending: Completion? = null
-    private val repeats = mutableMapOf<String, Int>()
-    private var lastRuntime = ""
+    private var enabledBuiltins=builtins().map { it.name }.toSet()
     private var focusedAccount = ""
     private var focusedTool = ""
 
-    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>, webAvailable: Boolean = true): ProviderConfig {
+    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>, webAvailable: Boolean = true, webSearchAvailable: Boolean = webAvailable, webReadAvailable: Boolean = webAvailable): ProviderConfig {
         if (!native) return config
         bindings.clear()
-        val definitions = builtins().filterNot { !webAvailable && it.name in setOf("web_search","read_web_page") }.toMutableList()
+        val definitions = builtins().filterNot { it.name=="web_search" && !webSearchAvailable || it.name=="read_web_page" && !webReadAvailable }.toMutableList()
+        enabledBuiltins=definitions.map { it.name }.toSet()
         var bytes = definitions.sumOf { NativeToolWire.toolJson(it).toString().toByteArray().size }
         tools.distinctBy { it.first to it.second.id }.asReversed().sortedWith(
             compareByDescending<Pair<String,ConnectionTool>> { it.first==focusedAccount && it.second.id==focusedTool }
@@ -60,21 +60,10 @@ class AgentHarness(val native: Boolean) {
                     catch (_: Exception) { throw AgentResponseException("The function arguments do not match the discovered action schema.") }
                     AgentDecision.PrepareAction(bound.accountId,bound.tool.id,args,"Requested connected action")
                 } ?: try {
-                    require(call.name in builtins().map { it.name })
+                    require(call.name in enabledBuiltins)
                     AgentProtocol.parse(JSONObject(args.toString()).put("type",call.name).toString()) }
                     catch (_: Exception) { throw AgentResponseException("The function was not registered for this account.") }
             }
-        }
-        // Identical calls with unchanged arguments usually indicate a stuck model. No automatic IO replay.
-        if (decision !is AgentDecision.Reply) {
-            val key = when(decision) {
-                is AgentDecision.PrepareAction -> "${decision.accountId}:${decision.tool}:${canonical(decision.arguments)}"
-                else -> decision.toString()
-            }
-            val progressKey = key + ":" + lastRuntime
-            val count = (repeats[progressKey] ?: 0) + 1
-            repeats[progressKey] = count
-            if (count >= 3) throw AgentResponseException("This step repeated without progress. Review the existing results before continuing.")
         }
         when(decision) {
             is AgentDecision.FindTools -> { focusedAccount=decision.accountId; focusedTool="" }
@@ -86,7 +75,6 @@ class AgentHarness(val native: Boolean) {
     }
 
     fun exchange(assistant: String, runtime: String): List<InferenceMessage> {
-        lastRuntime = runtime
         val c = pending.also { pending = null }
         if (!native || c == null || c.toolCalls.isEmpty()) return listOf(InferenceMessage("assistant",assistant),InferenceMessage("user",runtime))
         return listOf(InferenceMessage("assistant",c.text,toolCalls=c.toolCalls,providerReplay=c.providerReplay)) + c.toolCalls.map { InferenceMessage("tool",runtime,toolCallId=it.id) }

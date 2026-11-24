@@ -35,6 +35,7 @@ object WorkspaceRules {
             require(r.artifacts.all { it.text.length<=48000 && it.kind=="DRAFT" && it.sourceUrls.size<=100 && it.version>0 })
             r.budget.inference.validate()
             r.research.validate()
+            r.progress.validate()
             require(r.budget.modelSteps>=0 && r.budget.inputTokens>=0 && r.budget.outputTokens>=0)
             require(r.budget.maxModelSteps in 1..10000 && r.budget.maxOutputTokens in 1..100_000_000)
             require(r.events.zipWithNext().all { (a,b) -> b.sequence>a.sequence })

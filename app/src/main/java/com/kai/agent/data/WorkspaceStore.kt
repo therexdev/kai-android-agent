@@ -237,9 +237,9 @@ suspend fun KaiStore.authorizeRunContinuation(id: String) = change { state ->
     val run=state.runs.first { it.id==id }
     require(run.status !in setOf(RunStatus.RUNNING,RunStatus.QUEUED)) { "Pause this task before changing its allowance." }
     val executions=state.executions.map { r ->
-        if(r.sourceId!=id || (!r.budget.exhausted && r.failure!=com.kai.agent.runtime.FailureCode.BUDGET)) r else {
+        if(r.sourceId!=id || !r.resumable) r else {
             require(r.owner.isBlank()) { "The previous owner is still settling." }
-            r.copy(budget=r.budget.extend(true,state.settings.creditAccount.runCreditLimit),revision=r.revision+1)
+            r.copy(progress=r.progress.continued(),budget=if(r.budget.exhausted || r.failure==com.kai.agent.runtime.FailureCode.BUDGET) r.budget.extend(true,state.settings.creditAccount.runCreditLimit) else r.budget,revision=r.revision+1)
         }
     }
     state.copy(executions=executions) to Unit

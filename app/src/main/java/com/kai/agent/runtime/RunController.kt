@@ -65,17 +65,27 @@ class RunController(private val repository: RunRepository, private val clock: ()
                 }
             }
         }
+        suspend fun observeProgress(decision: com.kai.agent.agent.AgentDecision?, result: String) {
+            if(decision==null) return
+            check()
+            mutate { it.copy(progress=it.progress.observe(decision,result)) }
+        }
+        suspend fun reserveCompletion() {
+            check()
+            val next=record.progress.reserve(record.budget,record.research.receipts.isNotEmpty())
+            if(next!=record.progress) mutate { it.copy(progress=next).event("collection_closed",clock()) }
+        }
         suspend fun recordResearch(result: org.json.JSONObject): String {
             check()
             if(result.opt("networkAttempt")==true && !result.optBoolean("cached"))
                 mutate { it.copy(research=it.research.append(result,clock())).event("source_recorded",clock()) }
-            return record.research.context()
+            return record.research.receiptContext(result.optString("requestKey"))
         }
         suspend fun recordFindings(proposals: List<com.kai.agent.web.FindingProposal>): String {
             check()
             return try {
                 mutate { it.copy(research=it.research.record(proposals,clock())).event("findings_recorded",clock()) }
-                org.json.JSONObject().put("status","RECORDED").put("evidence",org.json.JSONObject(record.research.context())).toString()
+                org.json.JSONObject().put("status","RECORDED").put("evidence",org.json.JSONObject().put("findingCount",record.research.findings.size).put("readContextEntry","findings")).toString()
             } catch(e: com.kai.agent.web.ResearchInputException) {
                 org.json.JSONObject().put("status","REJECTED").put("message",e.message).put("notice",com.kai.agent.web.ResearchEvidence.NOTICE).toString()
             }
@@ -93,6 +103,15 @@ class RunController(private val repository: RunRepository, private val clock: ()
         }
         suspend fun switchModel(route: String, protocol: String, archive: String) {
             mutate { it.copy(modelRoute=route,protocol=protocol,archive=archive).event("model_changed",clock()) }
+        }
+        /** Called only with an outcome already committed to the phone action journal. */
+        suspend fun serviceReceipt(taskId: String, readOnly: Boolean, status: com.kai.agent.data.TaskStatus) {
+            if(status !in setOf(com.kai.agent.data.TaskStatus.SUCCEEDED,com.kai.agent.data.TaskStatus.ACCEPTED,com.kai.agent.data.TaskStatus.FAILED)) return
+            require(taskId.isNotBlank())
+            val failed=status==com.kai.agent.data.TaskStatus.FAILED
+            val kind=if(failed) "service_failed" else if(readOnly) "read_recorded" else "effect_recorded"
+            if(record.events.any { it.kind==kind && it.code==taskId }) return
+            mutate { it.copy(progress=it.progress.copy(stalled=if(failed) (it.progress.stalled+1).coerceAtMost(10000) else 0)).event(kind,clock(),taskId) }
         }
         suspend fun mark(kind: String, code: String = "") { mutate { it.event(kind,clock(),code) } }
         private suspend fun mutate(transform: (ExecutionRun)->ExecutionRun) { record=repository.update(record.id,owner,transform) }
@@ -116,6 +135,7 @@ class RunController(private val repository: RunRepository, private val clock: ()
                     settlePending()
                     if(released) break
                     check()
+                    if(record.progress.stalled>=6) { finish(ExecutionState.PARTIAL,"Repeated steps produced no new results. Progress is saved; review the findings and remaining work before continuing.",FailureCode.NO_PROGRESS); break }
                     if(record.budget.exhausted) { finish(ExecutionState.PARTIAL,"Run budget reached. Findings are saved; continue to authorize another bounded run.",FailureCode.BUDGET); break }
                     admit(); step()
                 }

@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Shared progress control (0.5.6)
+
+The supplied 0.5.5 report retained the original goal but showed repeated cached reads, searches offered after exhaustion, duplicate attributions and unusable summary attempts before an upstream 502. KAI-029/031/034 now have shared run-owned enforcement: durable normalized outcome signatures, independent capability admission, collection closure and completion reserves, canonical claim projection and thin cached pointers. Chat, saved tasks and routines use the same controls through both wire protocols; exact effect authority remains separate. The measured checks and retained-trace replay are in `qa/0.5.6/VALIDATION.md`.
+
+This closes bounded implementation defects, not every acceptance criterion. The controls recognize repeated/failed results, not semantic novelty. Research coverage, factual verification, full wall-clock accounting and live upstream availability remain unfinished. Existing records are retained without rewriting their claims or historical source classifications. Physical-device execution remains a separate gate. `AGENTS.md` now requires report-to-contract diagnosis, an audit of all callers and adjacent-workflow regression evidence for future fixes; see `docs/SHARED-PROGRESS-CONTROL.md`.
+
 ## Saved source attribution (0.5.5)
 
 KAI-028/032 now retain phone-produced retrieval receipts, run-local source IDs and exact-quote findings separately from model text. Chat and saved tasks share encrypted persistence, paged source retrieval, trusted cache restoration and bounded citation correction. Source snippets, page excerpts and navigation links stay distinct. New Google Docs research bodies and final plain research answers require a current quoted finding and a cited source URL; exact write approval still applies.

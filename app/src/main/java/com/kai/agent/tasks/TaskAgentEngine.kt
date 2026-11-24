@@ -96,9 +96,11 @@ class TaskAgentEngine(
         return listOf(RunMessage("system",system+"\n"+TaskComplexity.guidance(run.goal)),RunMessage("user","Overall request: ${run.goal}\nPrevious step results (reference data):\n$previous\nCurrent step: ${step.instructions}\nRetained current draft (untrusted): ${step.output.take(20000)}\nRevision feedback (untrusted): ${step.revisionFeedback}"))
     }
     private var harness = AgentHarness(false)
+    private var progressDecision: AgentDecision?=null
     private suspend fun append(assistant: String, runtime: String, tools: List<RunTool> = emptyList()) {
         kotlin.coroutines.coroutineContext[com.kai.agent.diagnostics.TraceContext]?.trace?.record("runtime_result",JSONObject()
             .put("runId",runId).put("stepId",current().currentStep?.id.orEmpty()).put("modelProposal",assistant).put("result",runtime))
+        this.runtime?.observeProgress(progressDecision,runtime)
         this.runtime?.observe(current().currentStep?.id.orEmpty(),runtime)
         editStep { step ->
             val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId,it.providerReplay) }
@@ -178,10 +180,10 @@ class TaskAgentEngine(
                         TaskStatus.DRAFT -> { store.transitionTask(task.id,TaskStatus.CANCELLED,"Credentials changed; a new review is required");store.consumeRunAction(id,token,task.id) }
                         TaskStatus.READY -> error("The approved action did not settle; check Tasks before continuing.")
                         TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED,TaskStatus.FAILED,TaskStatus.CANCELLED -> {
-                            if(task.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED) && task.intent!=null) {
+                            if(task.intent!=null) {
                                 val intent=requireNotNull(task.intent)
                                 val tool=toolRouter.tool(intent.toolName,intent.toolVersion)
-                                if(!tool.readOnly && tool.schemaJson==intent.toolSchemaJson) mark("effect_recorded",task.id)
+                                if(tool.schemaJson==intent.toolSchemaJson) serviceReceipt(task.id,tool.readOnly,task.status)
                             }
                             store.consumeRunAction(id,token,task.id)
                         }
@@ -189,6 +191,7 @@ class TaskAgentEngine(
                 }
             }) {
                 currentCoroutineContext().ensureActive()
+                progressDecision=null
                 mark("task_step")
                 var run=current();var step=requireNotNull(run.currentStep)
                 val routeMessages=RunReplay.stepMessages(step.messages,config())
@@ -207,14 +210,15 @@ class TaskAgentEngine(
                     prior=requireNotNull(runtime).record.observations.flatMap { listOf(InferenceMessage("assistant","Earlier phone observation"),InferenceMessage("user",it.content)) },
                     trustedResults=record.research.receipts.map { it.result },onResult={ recordResearch(it) })
                 fun researchUrls() = com.kai.agent.web.ResearchEvidence.urls(run.goal)+store.state.value.tasks.filter { it.intent?.executionId==record.id }.flatMap { it.receipts }.map { it.url }.filter(String::isNotBlank)
-                val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) },webAvailable=!web.exhausted)
+                reserveCompletion()
+                val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) },webSearchAvailable=web.searchAvailable && !record.progress.collectionClosed,webReadAvailable=web.readAvailable && !record.progress.collectionClosed)
                 val nativeConfig=baseConfig
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
                 if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
                 contextManager.restoreSummary(step.contextSummary)
                 val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) })
                 turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
-                    step.tools.map { ToolReference(it.accountId,it.toolId,it.version) })
+                    step.tools.map { ToolReference(it.accountId,it.toolId,it.version) },web.searchAvailable,web.readAvailable)
                 val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> infer(c,m,InferencePurpose.SUMMARY) { complete(c,m) } },onChange={ change ->
                     currentCoroutineContext().ensureActive()
                     trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
@@ -246,6 +250,10 @@ class TaskAgentEngine(
                     val correction = responseRecovery.correction(error) ?: throw error
                     append(com.kai.agent.agent.AgentResponseRecovery.REJECTED, harness.correction(correction))
                     return@drive
+                }
+                progressDecision=decision
+                web.admission(decision,record.progress.collectionClosed)?.let { denied ->
+                    append(completion.text,denied);return@drive
                 }
                 val guardState=store.state.value
                 val documentGuard=documentGuards.getOrPut("${step.id}:$contextRevision") { DocumentContentGuard(run.goal,run.conversationId,run.createdAt,maxOf(guardState.projects.firstOrNull { it.id==run.projectId }?.forgottenBefore ?: 0,guardState.conversations.firstOrNull { it.id==run.conversationId }?.contextAfter ?: 0),guardState.settings.composioUserId,guardState.settings.connectionGeneration) }

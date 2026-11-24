@@ -149,24 +149,27 @@ class WebResearchTest {
         resumed.execute(AgentDecision.ReadWebPage("https://koinos.io/ecosystem"))
         assertEquals(3,visited.size)
     }
-    @Test fun ambiguousProjectSearchKeepsBlockchainScopeAndRejectsUnrelatedPages() = runBlocking {
+    @Test fun retrievalDoesNotMislabelTopicRelevanceUsingProviderSpecificKeywords() = runBlocking {
         var searchUrl=""
         val c=client { url,_ -> searchUrl=url;WebDocument(url,html,"text/html") }
         val session=WebResearchSession("Look up Koinos projects",c)
         session.execute(AgentDecision.WebSearch("Koinos projects"))
-        assertTrue(searchUrl.contains("blockchain"))
-        val result=session.execute(AgentDecision.ReadWebPage("https://example.org/fact"))
-        assertTrue(result.contains("off_topic"))
-        assertFalse(session.hasEvidence)
+        assertTrue(searchUrl.contains("Koinos"));assertFalse(searchUrl.contains("blockchain"))
+        val result=JSONObject(session.execute(AgentDecision.ReadWebPage("https://example.org/fact")).removePrefix(WebResearchSession.PREFIX))
+        assertEquals("ok",result.getString("status"))
+        assertFalse(result.has("topicMatch"));assertTrue(session.hasEvidence)
     }
 
-    @Test fun documentReferencesUseCanonicalRetrievedUrlsAndRejectInventedLinks() = runBlocking {
-        val c=client { url,_ -> WebDocument(url,if(url.contains("duckduckgo")) html else "<html><title>Blockchain projects</title><main>Koinos blockchain <a href='https://project.example/'>Project</a></main></html>","text/html") }
-        val session=WebResearchSession("Look up Koinos projects",c)
-        session.execute(AgentDecision.WebSearch("Koinos projects"))
-        session.execute(AgentDecision.ReadWebPage("https://example.org/fact"))
-        fun action(url: String)=AgentDecision.PrepareAction("docs","GOOGLEDOCS_CREATE_DOCUMENT",JSONObject().put("text","Project: $url — source-backed blockchain project."),"")
-        assertNull(session.correction(action("https://project.example")))
-        assertNotNull(session.correction(action("https://invented.example/")))
+    @Test fun referenceProvenanceIsCheckedInTheSharedEvidenceLayerForEveryTopic() = runBlocking {
+        for(topic in listOf("Koinos projects","garden projects")) {
+            var evidence=ResearchEvidence()
+            val quote="The directory describes a community project."
+            val c=client { url,_ -> WebDocument(url,"<main>$quote<a href='https://project.example/'>Project</a></main>","text/html") }
+            val session=WebResearchSession("Research $topic https://source.example/",c,onResult={ evidence=evidence.append(it,1);evidence.receiptContext(it.optString("requestKey")) })
+            session.execute(AgentDecision.ReadWebPage("https://source.example/"))
+            evidence=evidence.record(listOf(FindingProposal("A community project.","s1_0",quote)),2)
+            assertNull(evidence.review("A project https://project.example/ from https://source.example/",true))
+            assertNotNull(evidence.review("A project https://invented.example/ from https://source.example/",true))
+        }
     }
 }
