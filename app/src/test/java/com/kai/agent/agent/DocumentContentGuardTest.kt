@@ -33,10 +33,10 @@ class DocumentContentGuardTest {
         assertTrue(runCatching { guard.validateAction(tool("GOOGLEDOCS_CREATE_DOCUMENT"), tasks) }.exceptionOrNull() is ConnectionServiceException)
         guard.validateAction(tool("GOOGLEDOCS_INSERT_TEXT"), tasks)
     }
-    @Test fun acceptedBodyWriteAllowsReplyButBlocksDuplicateAppendAndAllowsReadVerification() {
+    @Test fun acceptedBodyWriteRequiresReadbackButBlocksDuplicateAppendAndAllowsReadVerification() {
         val tasks = listOf(task(), task("GOOGLEDOCS_BATCH_UPDATE_DOCUMENT", """{"documentId":"doc-real","requests":[{"insertText":{"text":"test doc","endOfSegmentLocation":{}}}]}"""))
         val guard=guard()
-        assertNull(guard.checkReply(tasks))
+        assertNotNull(guard.checkReply(tasks))
         assertTrue(runCatching { guard.validateAction(tool("GOOGLEDOCS_INSERT_TEXT"), tasks) }.exceptionOrNull() is ConnectionServiceException)
         guard.validateAction(tool("GOOGLEDOCS_GET_DOCUMENT", true), tasks)
     }
@@ -55,7 +55,7 @@ class DocumentContentGuardTest {
             assertNotNull(guard().checkReply(listOf(candidate)))
         }
         assertNotNull(guard(boundary=104).checkReply(listOf(write)))
-        assertNull(guard().checkReply(listOf(write)))
+        assertNotNull(guard().checkReply(listOf(write)))
     }
     @Test fun metadataFooterOrWrongTextIsNotBodyEvidenceAndCorrectionsAreBounded() {
         for ((name,args) in listOf("GOOGLEDRIVE_UPDATE_FILE" to """{"description":"test doc"}""",
@@ -71,7 +71,7 @@ class DocumentContentGuardTest {
         val followup="can you write \"this is a test doc\" in that google doc?"
         val guard=guard(followup)
         assertNotNull(guard.checkReply(listOf(task())))
-        assertNull(guard.checkReply(listOf(task("GOOGLEDOCS_INSERT_TEXT", """{"documentId":"doc-real","text":"this is a test doc"}""", followup))))
+        assertNotNull(guard.checkReply(listOf(task("GOOGLEDOCS_INSERT_TEXT", """{"documentId":"doc-real","text":"this is a test doc"}""", followup))))
     }
     @Test fun missingAccountQuestionIsAllowedButAnUpdatingPromiseOrApprovalCodeIsNotCompletion() {
         assertNull(guard().checkReply(emptyList(), "Which Google account should I use?"))

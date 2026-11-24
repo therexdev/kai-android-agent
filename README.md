@@ -4,26 +4,18 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.2
+## Test release: 0.5.3
 
-The signed 0.5.2 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.3 test APK is distributed directly. The latest published release remains available above.
 
-- Requires current gateway qualification evidence before using managed native tools.
-- Preserves encrypted provider continuation through exact approval and saved-task resumes, while excluding it from reports, exports and model summaries.
-- Rejects continuation reuse across account/model routes and keeps completed-action receipts available when switching routes.
+- Recognizes supported Google Docs plain-text and structured body readbacks, including rendered Markdown headings and lists.
+- Checks the exact document, account and execution after write acknowledgement. Missing or truncated evidence stays unverified; changed text leaves a partial result without another write.
+- Makes verification evidence available to both chat and saved tasks, with the confirming read recorded in the encrypted run history.
+- Preserves 0.5.2 native continuation, exact action approval, saved research, uncertain-write protection, and signing continuity.
 
-Includes the 0.5.1 fixes below. The companion [gateway change](https://github.com/therexdev/kai/pull/108) requires staged deployment and explicit model qualification; installing the APK alone does not activate native routes. See [0.5.2 validation](qa/0.5.2/VALIDATION.md).
+See [document verification](docs/DOCUMENT-VERIFICATION.md), [validation](qa/0.5.3/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete. Text verification does not establish factual accuracy, formatting, link destinations, sharing or delivery.
 
-- Fixes transient approval dialogs for trusted read-only operations and keeps real write reviews stable during account-label refresh.
-- Moves Report to the very bottom of Settings.
-- Keeps Sheets writes, connection discovery and archive retrieval available when public research reaches its limits.
-- Retains source facts through context compaction, reads published contact/structured data, and uses bounded collection research allowances.
-- Keeps accepted document links, body-write evidence and remaining delivery steps visible after approval and context compaction.
-- Requires actual spreadsheet-content evidence before marking a populated-sheet request complete. Existing setup-only completions become resumable without replaying the created file.
-
-Includes the 0.5.0 shared agent runtime, saved research/drafts, MCP connections and bounded workflow templates. See the [fix details](docs/RESEARCH-SPREADSHEETS-AND-REVIEWS.md), [test guide](docs/architecture/ALPHA_TEST_GUIDE.md), and [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The full 64-item roadmap remains incomplete. Native tool calling requires separate server and route qualification; these Android fixes also work with the existing JSON protocol.
-
-Install over the existing app. Schema 3 is unchanged from 0.5.0. Physical-phone and live connected-service validation are distinct from the automated regression suite.
+Install over the existing preview app. Schema 3 is unchanged. This update needs no additional server deployment or paid route probe. The user's successful 0.5.2 phone test is prior-release evidence; a new physical test of 0.5.3 remains separate from automated checks.
 
 ## Account features
 

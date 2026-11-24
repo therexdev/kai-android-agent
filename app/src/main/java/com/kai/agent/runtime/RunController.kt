@@ -25,6 +25,13 @@ class RunController(private val repository: RunRepository, private val clock: ()
             if(text.isBlank() || record.artifacts.lastOrNull()?.text==text) return
             mutate { r -> r.copy(artifacts=(r.artifacts+RunArtifact(r.id+":draft",(r.artifacts.lastOrNull()?.version ?: 0)+1,text.take(48000),sources.distinct().take(100),clock())).takeLast(4)).event("draft_saved",clock()) }
         }
+        suspend fun documentVerification(evidence: List<Pair<String, DocumentVerification.Evidence>>) {
+            for ((writeId, read) in evidence.filter { it.second.matched }) {
+                val code = "$writeId:${read.readTaskId}"
+                if(record.events.none { it.kind=="document_text_verified" && it.code==code })
+                    mark("document_text_verified",code)
+            }
+        }
         suspend fun usage(input: Int, output: Int) { mutate { it.copy(budget=it.budget.copy(inputTokens=it.budget.inputTokens+input.coerceAtLeast(0),outputTokens=it.budget.outputTokens+output.coerceAtLeast(0))) } }
         suspend fun switchModel(route: String, protocol: String, archive: String) {
             mutate { it.copy(modelRoute=route,protocol=protocol,archive=archive).event("model_changed",clock()) }

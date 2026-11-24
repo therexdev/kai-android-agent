@@ -1,0 +1,11 @@
+{
+  "source": "User-provided 0.5.2 Android report; private contents excluded",
+  "result": "PASS",
+  "assertions": [
+    "Latest successful read matches approved visible body text",
+    "Confirmation attributed to the latest same-document read"
+  ],
+  "live_calls_made": 0,
+  "verifier_source_sha256": "6d5dcc8ce55a9316da0e222c86eda1f95b4b13cbd49d5237019e76e6f0883acc",
+  "final_bytecode_replay": "PASS"
+}
