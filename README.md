@@ -4,17 +4,17 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.9
+## Test release: 0.5.10
 
-The signed 0.5.9 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.10 test APK is distributed directly. The latest published release remains available above.
 
-The newest tool result now stays complete at every context projection level. Older results can still be compacted, but the next decision retains its exact schema/error, source excerpt or receipt. This corrects the latest report's truncated action feedback and source-read response. Existing payload and context limits still apply; an oversized active exchange stops explicitly instead of silently losing its content.
+Native tool definitions and messages now share one request budget. The planner reserves the current request, research, latest tool result and encrypted continuation before selecting optional schemas. Deferred actions remain inspectable. This fixes the independent registry allocation that could stop research at broad tool discovery even with a large model context window.
 
-Action feedback uses the active native/JSON protocol and identifies the discovered body field when required document content is missing. The app does not move generated text out of a title, invent a proposal, increase retries or relax approval. The tests now cover both required-Markdown and optional-text creation tools.
+Latest results and selected schemas remain intact. No retry allowance, context limit, automatic argument repair or approval rule is expanded. Numeric diagnostics expose request component sizes without exporting continuation contents.
 
-Private replay and scripted model/service tests do not prove live completion. See [the diagnosis and correction](docs/CURRENT-TOOL-RESULT-CONTRACT.md), [validation](qa/0.5.9/VALIDATION.md) and [phone checks](qa/0.5.9/RELEASE.md).
+See [the diagnosis and correction](docs/JOINT-REQUEST-BUDGET.md), [validation](qa/0.5.10/VALIDATION.md) and [phone checks](qa/0.5.10/RELEASE.md). Private reconstruction uses surrogate data for omitted native definitions and encrypted continuation; scripted tests do not prove live model completion.
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server update or new provider qualification is required. Physical 0.5.9 validation remains open.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server update is required. Physical 0.5.10 validation remains open.
 
 ## Account features
 
