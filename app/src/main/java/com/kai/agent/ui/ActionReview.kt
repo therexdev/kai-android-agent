@@ -29,7 +29,8 @@ internal fun ApprovalCard(
     autoOpen: Boolean = false,
 ) {
     // A changed proposal must be reviewed afresh. Closing the review leaves it pending.
-    var reviewing by rememberSaveable(approval) { mutableStateOf(autoOpen) }
+    val reviewIdentity=approval.reviewKey.ifBlank { listOf(approval.id,approval.account,approval.tool,approval.arguments,approval.runId).joinToString("\u0000") }
+    var reviewing by rememberSaveable(approval.id,reviewIdentity) { mutableStateOf(autoOpen) }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(reviewing) {
@@ -50,7 +51,7 @@ internal fun ApprovalCard(
             }
         }
     }
-    if (reviewing) key(approval) { Dialog(
+    if (reviewing) key(approval.id,reviewIdentity) { Dialog(
         onDismissRequest={reviewing=false},
         properties=DialogProperties(dismissOnBackPress=true,dismissOnClickOutside=false,
             usePlatformDefaultWidth=false,decorFitsSystemWindows=false),

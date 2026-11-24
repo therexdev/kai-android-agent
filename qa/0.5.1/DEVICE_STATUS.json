@@ -1,0 +1,6 @@
+{
+  "attachedDevices": 0,
+  "instrumentationStarted": false,
+  "passed": false,
+  "reason": "No Android device attached. Prior software emulator package services were unavailable; physical device and live connected-service validation remain open."
+}

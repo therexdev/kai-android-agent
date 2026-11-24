@@ -45,7 +45,8 @@ class PublicWebTransport : WebTransport {
                 target = PublicWebPolicy.url(target.resolve(response.location)?.toString().orEmpty())
             } else {
                 if (response.status !in 200..299) throw WebResearchException(when (response.status) {
-                    401, 403 -> "The web service denied access. Check the search key, or use the default search."
+                    401, 403 -> if(headers.isNotEmpty()) "The search API denied access. Check the search key, or use the default search."
+                        else "This website refused the page request (HTTP ${response.status}). Other public pages and search remain available; use another source rather than repeating this refused URL."
                     429 -> "The web service is temporarily rate-limited. Try again later."
                     else -> "The web service could not return this page (HTTP ${response.status})."
                 }, code="HTTP_${response.status}")

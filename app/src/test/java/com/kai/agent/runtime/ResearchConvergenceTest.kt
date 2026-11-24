@@ -31,7 +31,8 @@ class ResearchConvergenceTest {
             prior=prior+listOf(InferenceMessage("assistant","read"),InferenceMessage("user",result))
         }
         assertEquals(1,calls)
-        assertTrue(WebResearchSession("Research https://example.org/",c,prior=prior).exhausted)
+        assertFalse(WebResearchSession("Research https://example.org/",c,prior=prior).exhausted)
+        assertTrue(WebResearchSession("Research https://example.org/",c,prior=prior).needsNewApproach)
         val denied=WebResearchSession("Research",c).execute(AgentDecision.ReadWebPage("https://127.0.0.1/private"))
         assertTrue(denied.contains("URL_POLICY"));assertTrue(denied.contains("networkAttempt\":false"));assertEquals(1,calls)
     }

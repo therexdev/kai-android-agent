@@ -4,20 +4,20 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.0
+## Test release: 0.5.1
 
-**[Download the 0.5.0 test APK](https://github.com/therexdev/kai-android-agent/releases/download/v0.5.0-alpha.1/KAI-Android-0.5.0.apk)**
+The signed 0.5.1 test APK is distributed directly while its GitHub release upload is pending. The latest published release remains available above.
 
-- Chat, voice, saved tasks and routines use a shared execution controller with an encrypted run journal.
-- Research findings and drafts survive model failures and restart. Continue and Answer from findings preserve useful work.
-- Exact action approvals, durable submission receipts, uncertain-write reconciliation and returned document links stay on the phone.
-- Model failures have typed recovery; optional ordered fallbacks preserve the selected account and free/paid policy.
-- Adds user-owned remote MCP connections, bounded workflow templates with per-node models and at most two review rounds, and cited file retrieval with coverage reporting.
-- Includes automatic context management, connected paid credits, the model dropdown and the earlier voice interruption changes.
+- Fixes transient approval dialogs for trusted read-only operations and keeps real write reviews stable during account-label refresh.
+- Moves Report to the very bottom of Settings.
+- Keeps Sheets writes, connection discovery and archive retrieval available when public research reaches its limits.
+- Retains source facts through context compaction, reads published contact/structured data, and uses bounded collection research allowances.
+- Keeps accepted document links, body-write evidence and remaining delivery steps visible after approval and context compaction.
+- Requires actual spreadsheet-content evidence before marking a populated-sheet request complete. Existing setup-only completions become resumable without replaying the created file.
 
-This is the first test release of the architecture refactor. The [64-item implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md) identifies implemented, partial, gated and future capabilities. Physical-phone audio and live connected-service acceptance require testing. Native tool calling also requires a separately deployed and qualified gateway route; installing this APK does not activate it.
+Includes the 0.5.0 shared agent runtime, saved research/drafts, MCP connections and bounded workflow templates. See the [fix details](docs/RESEARCH-SPREADSHEETS-AND-REVIEWS.md), [test guide](docs/architecture/ALPHA_TEST_GUIDE.md), and [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The full 64-item roadmap remains incomplete. Native tool calling requires separate server and route qualification; these Android fixes also work with the existing JSON protocol.
 
-Follow the [test guide](docs/architecture/ALPHA_TEST_GUIDE.md). The encrypted database upgrade preserves existing data and pending approvals; older APKs cannot open the new database schema. Keep an export before updating if you need a deliberate downgrade.
+Install over the existing app. Schema 3 is unchanged from 0.5.0. Physical-phone and live connected-service validation are distinct from the automated regression suite.
 
 ## Account features
 
@@ -55,7 +55,7 @@ The phone owns conversation history, memory, task records, files, and permission
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **40**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **41**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 

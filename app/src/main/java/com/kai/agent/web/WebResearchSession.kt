@@ -28,9 +28,19 @@ class WebResearchSession(
     private var reads = 0
     private var noProgress = 0
     private val cached = linkedMapOf<String,JSONObject>()
-    val exhausted get() = searches>=6 || reads>=10 || noProgress>=3
-    val budgetSummary get() = "Research budget: $searches/6 search actions, $reads/10 page actions; $noProgress consecutive attempts without new sources. " +
-        if(exhausted) "Research tools are now closed. Return useful findings and the actual limitation as a partial result; do not claim a document was written or ask for a document ID when creating one." else "Converge on relevant sources and reserve a final answer."
+    private val collectionSize=com.kai.agent.runtime.TaskComplexity.collectionSize(instruction)
+    private val maxSearches=maxOf(6,collectionSize*2+2).coerceAtMost(42)
+    private val maxReads=maxOf(10,collectionSize*3+2).coerceAtMost(62)
+    val exhausted get() = searches>=maxSearches && reads>=maxReads
+    val needsNewApproach get() = noProgress>=3
+    private fun unreadSources()=allowed.filter { "page:$it" !in cached }.take(6)
+    val budgetSummary get() = "Research budget: $searches/$maxSearches search actions, $reads/$maxReads page actions; $noProgress consecutive attempts without new sources. " + when {
+        exhausted -> "Web requests have reached their limits. Retained findings, archive retrieval, tool discovery and reviewed connected-app writes remain available. Finish the requested artifact using supported findings, or return a clearly partial result."
+        needsNewApproach -> "Repeated results are not new research. Read an unread source or search a specific entity and missing field/reviews. " + unreadSources().joinToString(" ").take(900)
+        searches>=maxSearches -> "Search requests have reached their limit; unread public pages and connected actions remain available."
+        reads>=maxReads -> "Page requests have reached their limit; search and connected actions remain available."
+        else -> "Use sources for each requested entry, then prepare the reviewed artifact. Reserve steps for writing and checking the result."
+    }
 
     private var nudged = false
     private var redirected = prior.any { it.content.startsWith(DIRECT_CONTENT_CORRECTION) }
@@ -89,11 +99,11 @@ class WebResearchSession(
         val result = try {
             when(decision) {
                 is AgentDecision.WebSearch -> {
-                    if(exhausted) return policyResult(kind,"BUDGET_EXHAUSTED",budgetSummary)
+                    if(searches>=maxSearches) return policyResult(kind,"SEARCH_BUDGET_EXHAUSTED",budgetSummary)
                     client.search(scopedQuery(decision.query), braveKey, smallContext)
                 }
                 is AgentDecision.ReadWebPage -> {
-                    if(exhausted) return policyResult(kind,"BUDGET_EXHAUSTED",budgetSummary)
+                    if(reads>=maxReads) return policyResult(kind,"PAGE_BUDGET_EXHAUSTED",budgetSummary)
                     val url = validatedUrl
                     if(url !in allowed) return policyResult(kind,"URL_POLICY","Read a URL returned by search or supplied by the user first.")
                     client.read(url, smallContext)

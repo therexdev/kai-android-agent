@@ -1,0 +1,31 @@
+{
+  "counts": {
+    "Warning": 6
+  },
+  "issues": [
+    {
+      "id": "ChromeOsAbiSupport",
+      "severity": "Warning"
+    },
+    {
+      "id": "ViewConstructor",
+      "severity": "Warning"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning"
+    }
+  ]
+}

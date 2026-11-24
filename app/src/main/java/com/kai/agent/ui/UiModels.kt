@@ -81,6 +81,7 @@ data class KaiApproval(
     val tool: String = "",
     val arguments: String = "",
     val runId: String = "",
+    val reviewKey: String = "",
 )
 data class KaiVoice(val id: String, val label: String, val detail: String = "", val locale: String = "", val local: Boolean = true)
 

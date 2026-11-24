@@ -110,6 +110,21 @@ class ActionReviewTest {
         assertEquals(listOf("approveAction:replacement"),calls)
     }
 
+    @Test fun displayLabelRefreshDoesNotCloseOrReopenAnExactReview() {
+        val calls=mutableListOf<String>()
+        val selected=mutableStateOf(approval.copy(reviewKey="exact-intent-one"))
+        compose.setContent { KaiTheme(true) { ApprovalCard(selected.value,actions(calls),autoOpen=true) } }
+        compose.runOnIdle { selected.value=selected.value.copy(account="Refreshed display label") }
+        compose.onNodeWithTag("approval-review").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close review; keep action pending").performClick()
+        compose.runOnIdle { selected.value=selected.value.copy(account="Another display refresh") }
+        compose.onNodeWithTag("approval-review").assertDoesNotExist()
+        assertTrue(calls.isEmpty())
+        compose.runOnIdle { selected.value=selected.value.copy(arguments="Changed reviewed arguments",reviewKey="exact-intent-two") }
+        compose.onNodeWithTag("approval-review").assertIsDisplayed()
+        assertTrue(calls.isEmpty())
+    }
+
     private fun assertControlsInsidePanel() {
         val panel=compose.onNodeWithTag("approval-review").getUnclippedBoundsInRoot()
         for(tag in listOf("approval-approve","approval-decline")) {

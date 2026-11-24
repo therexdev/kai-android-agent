@@ -43,6 +43,8 @@ class AgentResponseRecovery {
         return "Phone format check: the last model response was rejected before any action from that response ran. " +
             "Return exactly ONE complete JSON object for the next remaining step, with type first. " +
             "No commentary, fences, alternatives or second object. Keep it concise. " +
+            "End the object with its matching brace only; do not append a bracket, code or prose. " +
+            "Preserve the remaining task step and existing receipts instead of restarting broad research after a format error. " +
             (if (error?.outputLimit == true) "The response ran out of output tokens. Finish one smaller content chunk, within 16,000 UTF-8 bytes of arguments; use later append actions for the remainder. Reuse any existing document ID from receipts. Do not recreate a submitted document. " else "") +
             "Use only the supplied account IDs, discovered tools and exact schema fields. " +
             "Ask a clarification with reply if required details are missing; never guess. " +

@@ -28,7 +28,7 @@ import com.kai.agent.data.normalizedSpeechLanguageTag
 import java.util.Locale
 
 @Composable
-internal fun SettingsContent(state:KaiUiState,actions:KaiUiActions,onClose:()->Unit,onVoice:()->Unit = {}) {
+internal fun SettingsContent(state:KaiUiState,actions:KaiUiActions,onClose:()->Unit,onVoice:()->Unit = {},onReport:()->Unit = {}) {
     var searchKey by remember { mutableStateOf("") }
     var removeComposioKey by remember {mutableStateOf(false)}
     Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).imePadding().verticalScroll(rememberScrollState()).padding(horizontal=24.dp).padding(bottom=28.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -61,6 +61,7 @@ internal fun SettingsContent(state:KaiUiState,actions:KaiUiActions,onClose:()->U
         if(state.composioKeySaved) OutlinedButton(onClick={removeComposioKey=true},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text("Remove Composio key from this phone")}
         SoftCard {Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){KaiIcon(KaiGlyph.SHIELD,Modifier.size(19.dp),MaterialTheme.colorScheme.secondary);Column {Text("You're in control",style=MaterialTheme.typography.labelLarge);Spacer(Modifier.height(5.dp));Text("Choose what KAI remembers and which accounts it can use. Review outgoing actions before they happen.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}}}
         Text("KAI · Android early access",modifier=Modifier.fillMaxWidth(),textAlign=TextAlign.Center,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick=onReport,enabled=state.currentConversationId!=null,modifier=Modifier.fillMaxWidth()) { Text("Report") }
     }
     if(removeComposioKey) AlertDialog(onDismissRequest={removeComposioKey=false},title={Text("Remove Composio key?")},text={Text("Removes the saved key from this phone. Your Composio project and connected accounts stay in place, including connections used by other agents.")},confirmButton={TextButton(onClick={actions.signOutConnections();removeComposioKey=false}){Text("Remove key",color=MaterialTheme.colorScheme.error)}},dismissButton={TextButton(onClick={removeComposioKey=false}){Text("Keep key")}})
 }
