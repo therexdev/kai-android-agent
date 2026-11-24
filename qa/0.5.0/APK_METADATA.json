@@ -1,0 +1,19 @@
+{
+  "version": "0.5.0",
+  "versionCode": 40,
+  "apk": "KAI-Android-0.5.0.apk",
+  "bytes": 125607883,
+  "sha256": "6794141bab4b76aaeb92a01dcef184ae4b4b8f60c8d02ba271c1c8fab1b8e587",
+  "certificateSha256": "a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89",
+  "jvm": {
+    "tests": 528,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintErrors": 0,
+  "lintWarnings": 6,
+  "deviceGate": "not_run_emulator_package_services_unavailable",
+  "productionGatewayDeployed": false,
+  "physicalVoiceValidated": false
+}
