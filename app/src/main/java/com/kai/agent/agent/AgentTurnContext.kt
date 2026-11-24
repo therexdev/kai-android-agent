@@ -149,7 +149,8 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
                 val recent=i>=exchanges.size-keep
                 val original=if(!recent && e.compactRuntime.length<e.runtime.length) e.compactRuntime else e.runtime
                 val catalog=original.contains("phone_tool_discovery") || original.contains("phone_tool_schema")
-                val cap=when { level>=3 -> 1500; i==exchanges.lastIndex -> Int.MAX_VALUE; level>=2 -> 5000; recent || !catalog -> Int.MAX_VALUE; else -> 1400 }
+                // The next decision needs the complete latest result at every projection level.
+                val cap=when { i==exchanges.lastIndex -> Int.MAX_VALUE; level>=3 -> 1500; level>=2 -> 5000; recent || !catalog -> Int.MAX_VALUE; else -> 1400 }
                 // A just-inspected legacy schema must remain exact until the model can use it.
                 val schema=original.trimStart().startsWith("{") && runCatching { org.json.JSONObject(original).optString("source")=="phone_tool_schema" }.getOrDefault(false)
                 val runtime=if(recent && schema) original else ToolContextProjection.compact(original,cap,"t_${i+1}")

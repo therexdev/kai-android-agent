@@ -20,6 +20,7 @@ class ResearchDocumentFlowTest {
     private val docId="fixture-document-123456789"
     private val docUrl="https://docs.google.com/document/d/$docId/edit"
     private val create="GOOGLEDOCS_CREATE_DOCUMENT_MARKDOWN"
+    private val plainCreate="GOOGLEDOCS_CREATE_DOCUMENT"
     private val read="GOOGLEDOCS_GET_DOCUMENT_PLAINTEXT"
     private val send="GMAIL_SEND_EMAIL"
     private class Repo: RunRepository {
@@ -31,13 +32,14 @@ class ResearchDocumentFlowTest {
             return transform(saved).also { saved=it }
         }
     }
-    private inner class Services: DirectComposioTransport {
+    private inner class Services(private val createId: String): DirectComposioTransport {
+        private val bodyField=if(createId==plainCreate) "text" else "markdown_text"
         var writes=0;var reads=0;var storedBody="";var sentBody=""
         fun metadata(id: String): JSONObject {
-            val fields=when(id) { create->listOf("title","markdown_text");read->listOf("document_id");else->listOf("recipient_email","subject","body") }
+            val fields=when(id) { createId->listOf("title",bodyField);read->listOf("document_id");else->listOf("recipient_email","subject","body") }
             return JSONObject().put("slug",id).put("name",id).put("toolkit",JSONObject().put("slug",if(id==send) "gmail" else "googledocs"))
                 .put("version","fixture-v1").put("tags",JSONArray(if(id==read) listOf("readOnlyHint") else emptyList<String>()))
-                .put("input_parameters",JSONObject().put("type","object").put("properties",JSONObject().apply { fields.forEach { put(it,JSONObject().put("type","string")) } }).put("required",JSONArray(fields)).put("additionalProperties",false))
+                .put("input_parameters",JSONObject().put("type","object").put("properties",JSONObject().apply { fields.forEach { put(it,JSONObject().put("type","string")) } }).put("required",JSONArray(if(id==plainCreate) listOf("title") else fields)).put("additionalProperties",false))
         }
         override suspend fun request(path: String,apiKey: String,method: String,query: Map<String,String>,body: JSONObject?): JSONObject = when {
             path=="/connected_accounts" -> JSONObject().put("items",JSONArray(listOf("docs" to "googledocs","mail" to "gmail").filter { query["connected_account_ids"]==null || it.first==query["connected_account_ids"] }.map { (id,kit)->
@@ -46,7 +48,7 @@ class ResearchDocumentFlowTest {
             path.startsWith("/tools/execute/") -> {
                 val args=body!!.getJSONObject("arguments")
                 when(path.substringAfterLast('/')) {
-                    create -> { writes++;assertEquals(1,writes);storedBody=args.getString("markdown_text");JSONObject().put("successful",true).put("data",JSONObject().put("document_id",docId).put("url",docUrl)) }
+                    createId -> { writes++;assertEquals(1,writes);storedBody=args.getString(bodyField);JSONObject().put("successful",true).put("data",JSONObject().put("document_id",docId).put("url",docUrl)) }
                     read -> { reads++;assertEquals(docId,args.getString("document_id"));JSONObject().put("successful",true).put("data",JSONObject().put("document_id",docId).put("plain_text",storedBody)) }
                     send -> { writes++;sentBody=args.getString("body");assertEquals("recipient@example.test",args.getString("recipient_email"));assertTrue(sentBody.contains(docUrl));assertTrue(args.getString("subject").isNotBlank());JSONObject("""{"successful":true,"data":{"id":"fixture-message"}}""") }
                     else -> error("Unexpected execution")
@@ -62,11 +64,18 @@ class ResearchDocumentFlowTest {
     @Test fun addingEmailPreservesTheDocumentFlowAndUsesTheReturnedLinkOnce()=runBlocking {
         for(origin in RunOrigin.entries) for(native in listOf(false,true)) for(resume in listOf(false,true)) scenario(true,origin,native,resume)
     }
-    private suspend fun scenario(email: Boolean,origin: RunOrigin,native: Boolean,resume: Boolean) {
+    @Test fun optionalTextCreationRepairsAnEmptyProposalBeforeDocumentReview()=runBlocking {
+        for(origin in RunOrigin.entries) for(native in listOf(false,true)) for(resume in listOf(false,true)) scenario(false,origin,native,resume,plainCreate)
+    }
+    @Test fun optionalTextCreationAndEmailRetainTheSameReviewAndReceiptFlow()=runBlocking {
+        for(origin in RunOrigin.entries) for(native in listOf(false,true)) for(resume in listOf(false,true)) scenario(true,origin,native,resume,plainCreate)
+    }
+    private suspend fun scenario(email: Boolean,origin: RunOrigin,native: Boolean,resume: Boolean,create: String=this.create) {
+        val bodyField=if(create==plainCreate) "text" else "markdown_text"
         val request="Research projects at $url and create a Google doc called Projects"+(if(email) "; email its link to recipient@example.test" else "")
         val repo=Repo();var session=RunController(repo).open(ExecutionRun("run","chat","msg",origin,GoalContract.infer(request),privacyRevision=1,createdAt=1,
             progress=if(resume) RunProgress(stalled=6,collectionClosed=true,reason="Old stop") else RunProgress()))
-        val services=Services();val client=DirectComposioClient(services);client.useCredentials(ComposioCredentials("fixture-key","owner"));val account=client.refresh()
+        val services=Services(create);val client=DirectComposioClient(services);client.useCredentials(ComposioCredentials("fixture-key","owner"));val account=client.refresh()
         val settings=AppSettings(composioApiKey="fixture-key",composioUserId="owner",connectionGeneration=account.generation)
         val tools=listOf(create,read,send).associateWith { client.tool(it,"latest") }
         var fetches=0
@@ -148,9 +157,20 @@ class ResearchDocumentFlowTest {
         val correction=requireNotNull(recovery.correction(rejected,native))
         assertTrue(correction.contains("PREPARE"));assertEquals(0,services.writes);assertTrue(tasks.isEmpty())
         context.appendOutcome(correction)
+        if(create==plainCreate) {
+            val incomplete=proposal("",JSONObject().put("title","Projects"),create)
+            val d=harness.parse(incomplete,AgentResponseRecovery(),true) as AgentDecision.PrepareAction
+            val toolRecovery=AgentToolRecovery { native }
+            val checked=requireNotNull(toolRecovery.recover(d,account.accounts,false,{_,_->tools[create]},{_,_->error("No rediscovery")},
+                validateAction={ action,tool->guard.validateAction(tool,tasks,action.arguments) }))
+            assertTrue(checked.payload.full.contains("in text, not in title"));assertEquals(0,services.writes);assertTrue(tasks.isEmpty())
+            append(incomplete,checked.payload.full)
+            if(resume) context=AgentTurnContext(initial,checkpointSeed=context.archive(),managed=true).also { it.progressContext=GoalProgress.render(tasks,session.record,emptyList()) }
+            assertEquals(checked.payload.full,context.project(3).last().content)
+        }
         // The fixture drafts only from material asserted present in the real projected model input.
         val body="Projects\n$sourceText\nSource: $url"
-        val write=execute(create,JSONObject().put("title","Projects").put("markdown_text",body))
+        val write=execute(create,JSONObject().put("title","Projects").put(bodyField,body))
         assertEquals(body,services.storedBody);assertEquals(1,services.writes)
         execute(read,JSONObject().put("document_id",docId))
         assertTrue(DocumentVerification.evaluate(write,tasks).matched)

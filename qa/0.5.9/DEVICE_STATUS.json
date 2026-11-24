@@ -1,0 +1,8 @@
+{
+  "instrumentation_apk_assembly": "PASS",
+  "connectedDebugAndroidTest": "NOT_RUN_NO_CONNECTED_DEVICE",
+  "device_tests_executed": 0,
+  "physical_0_5_9_validation": "NOT_PERFORMED",
+  "live_model_calls": 0,
+  "live_connected_service_writes": 0
+}

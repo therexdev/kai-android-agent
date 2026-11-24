@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Current tool result preservation (0.5.9)
+
+The 0.5.8 report reaches two creation proposals, but omits body text both times. The second proposal puts the research in the title. Its preceding action correction was compacted before the model could use it: a 1,500-character projection rule ran ahead of the newest-result exemption and removed the corrective schema. The same path discarded the just-requested archived source excerpt. This violates the existing active-exchange contract and predates 0.5.8.
+
+0.5.9 restores the newest-result exemption at every projection level, across both adapters and protocols. Older data remains compactable; all payload/token limits remain. The existing action correction follows the active protocol and names the actual missing field. Both invalid reported proposals remain rejected, with no increased retry allowance or argument rewriting. Tests now include optional-body creation as well as the earlier successful Markdown tool. Live model choice and output quality remain unproved; see `qa/0.5.9/VALIDATION.md`.
+
 ## Action preparation and reply contract (0.5.8)
 
 The latest report retained the source text and discovered write schema but ended in preliminary confirmation prose before creating an approval card. The same model had produced a successful document proposal in the earlier 0.5.2 report. This exposes a reply-contract gap that predates 0.5.7; the exact cause of the model's changed choice is unproved.

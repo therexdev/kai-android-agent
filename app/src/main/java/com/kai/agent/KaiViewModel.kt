@@ -709,7 +709,7 @@ class KaiViewModel(
             saveProgress()
         }
         val responseRecovery = com.kai.agent.agent.AgentResponseRecovery()
-        val toolRecovery = com.kai.agent.agent.AgentToolRecovery()
+        val toolRecovery = com.kai.agent.agent.AgentToolRecovery { harness.native }
         runtime.drive {
             ensureActiveTurn(epoch)
             saveProgress()

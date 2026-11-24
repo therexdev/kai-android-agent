@@ -68,7 +68,7 @@ class DocumentContentGuard(
             if(bodyFields.isNotEmpty() && bodyFields.none { key ->
                 val body=arguments.opt(key) as? String ?: return@none false
                 if(text!=null) body.trimEnd('\r','\n')==text else body.trim().length>=40
-            }) throw ConnectionServiceException("The creation action supports body text, but the requested body is missing. Include the actual researched text or supplied content before preparing approval; an empty document is unfinished.")
+            }) throw ConnectionServiceException("The creation action supports body text, but the requested body is missing. Put the actual researched text or supplied content in ${bodyFields.joinToString(" or ")}, not in title, before preparing approval; an empty document is unfinished.")
         }
         if (relevant.any { it.status in setOf(TaskStatus.UNKNOWN, TaskStatus.RUNNING) })
             throw ConnectionServiceException("An earlier document action has an unconfirmed outcome. Read its status or ask the user; never repeat it.")

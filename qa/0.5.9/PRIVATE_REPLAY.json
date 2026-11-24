@@ -1,0 +1,47 @@
+{
+  "source": "User-provided 0.5.8 report; private contents excluded",
+  "baseline_0_5_8": {
+    "result": "PASS",
+    "providerSchemaHasOptionalText": true,
+    "messagesPlusMaximumRegistryBytes": 44427,
+    "sourceReadPreserved": false,
+    "protocolResumeCases": 8,
+    "liveCalls": 0,
+    "bothReportedProposalsStillRejected": true,
+    "latestResultPreserved": false
+  },
+  "candidate_0_5_9": {
+    "result": "PASS",
+    "providerSchemaHasOptionalText": true,
+    "messagesPlusMaximumRegistryBytes": 48015,
+    "sourceReadPreserved": true,
+    "protocolResumeCases": 8,
+    "liveCalls": 0,
+    "bothReportedProposalsStillRejected": true,
+    "latestResultPreserved": true
+  },
+  "earlier_report_regressions": {
+    "result": "PASS",
+    "originalGoalRequiresEffect": true,
+    "reconstructedRegistryOffersDocumentCreate": true,
+    "latestReportResponseRejectedInBothProtocols": true,
+    "existingCorrectionPreservesReviewAndMissingInputContract": true,
+    "liveCalls": 0,
+    "reconstructedRegistryToolCount": 16,
+    "previousSuccessfulDocumentArgumentsPreservedInBothProtocols": true,
+    "previousSuccessfulArgumentsPassCurrentSchema": true
+  },
+  "live_calls_made": 0,
+  "limitations": [
+    "Compiled-class offline reconstruction of diagnostic exports; no trusted-state import",
+    "Preservation does not establish why the model chose the wrong field or prove its next live choice",
+    "Both invalid reported proposals still fail body validation; no automatic argument rewrite or submission"
+  ],
+  "source_sha256": {
+    "agent/AgentTurnContext.kt": "f0860baf8dc5036e7119588ac0be2b76bf4164cb81713739517a643f4ad6416f",
+    "agent/AgentToolRecovery.kt": "628a281496102b871f738409fe1aaa5ddd247b62dcd460b236ac0913116738f4",
+    "agent/DocumentContentGuard.kt": "935c9508cbcf3d09246c768afdbde59825dfe19878ada1ae71a24c73fc92d058",
+    "KaiViewModel.kt": "b488e83d1391f371667aebe4bb208a2dfacdaf42a9312d5c077571460f354dd5",
+    "tasks/TaskAgentEngine.kt": "0c6ca1e6863d71fac579a8e54c5d54e7f4193085184d8cfbcdb070d0d9e8423b"
+  }
+}
