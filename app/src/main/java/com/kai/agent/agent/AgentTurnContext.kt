@@ -160,7 +160,7 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
                     listOf(InferenceMessage("assistant",if(compactOld && e.assistant.length>1200) "Earlier proposal retained in task records." else e.assistant),InferenceMessage("user",runtime))
             }
         }
-        val research=if(compactOld) ResearchEvidenceProjection.project(exchanges.mapIndexed { i,e -> "t_${i+1}" to e.runtime },if(level>=3) 1800 else 6500)
+        val research=if(compactOld && progressContext==null) ResearchEvidenceProjection.project(exchanges.mapIndexed { i,e -> "t_${i+1}" to e.runtime },if(level>=3) 1800 else 6500)
             ?.let { listOf(InferenceMessage("user",it)) }.orEmpty() else emptyList()
         return initial+progress()+marker+research+results
     }

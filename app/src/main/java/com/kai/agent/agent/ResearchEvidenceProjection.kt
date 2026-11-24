@@ -12,7 +12,7 @@ object ResearchEvidenceProjection {
         for((id,raw) in records) {
             if(!raw.startsWith(WebResearchSession.PREFIX)) continue
             val data=runCatching { JSONObject(raw.removePrefix(WebResearchSession.PREFIX)) }.getOrNull() ?: continue
-            if(data.optString("status")!="ok") continue
+            if(data.optString("status")!="ok" || data.optBoolean("cached")) continue
             if(data.optString("kind")=="page") {
                 val url=data.optString("url");if(url.isBlank())continue
                 pages[url]=JSONObject().put("entryId",id).put("url",url).put("title",data.optString("title").take(120))

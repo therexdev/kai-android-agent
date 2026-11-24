@@ -28,6 +28,7 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
                 ExecutionState.COMPLETED -> "Research saved · review sources"
                 else -> "Paused · progress saved"
             },style=MaterialTheme.typography.titleSmall)
+            if(run.progress.collectionClosed) Text("Using saved findings to finish · collection paused",style=MaterialTheme.typography.bodySmall)
             if(run.detail.isNotBlank()) Text(run.detail,style=MaterialTheme.typography.bodySmall)
             if(run.resumable && (run.budget.exhausted || run.failure==FailureCode.BUDGET)) {
                 val allowance=InferenceLedger.allowance(run.origin!=RunOrigin.CHAT,state.runCreditLimit)

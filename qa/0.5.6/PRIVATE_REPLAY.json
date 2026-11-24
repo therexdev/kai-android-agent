@@ -1,0 +1,23 @@
+{
+  "source": "User-provided 0.5.5 Android report; private contents excluded",
+  "result": "PASS",
+  "assertions": [
+    "17 retained runtime outcomes close research collection under shared progress controls",
+    "24 captured attributions yield 13 distinct exact source/claim records in a fresh offline fixture",
+    "All 13 canonical claims survive bounded projection without a duplicate legacy index",
+    "Captured upstream HTTP 502 remains classified while the HTML error page is omitted"
+  ],
+  "limitations": [
+    "Retained trace only; earlier events were dropped",
+    "Offline fixture remaps source identifiers; no production state import or migration",
+    "Does not prove new live model behavior, completed document/email, or upstream availability"
+  ],
+  "live_calls_made": 0,
+  "source_sha256": {
+    "runtime/RunProgress.kt": "f1b2c3e1e9c8e0bd56a25585652445d3cb81a6b5b87da659e3a52c109fd9c934",
+    "web/ResearchEvidence.kt": "6574fa44eea3afd3b6daa981b0b6214b2e16d3d359855d66f49c8e75224917d2",
+    "agent/AgentTurnContext.kt": "259c01dcd0d03d04dae91cc7c9b10120c9d0418997f2e175f4bd1708470ea566",
+    "diagnostics/ChatDiagnostics.kt": "4309fb87df32ad1f6fe193c3187ce5ff95f776a96eb30558a2c3138beff4fcf1"
+  },
+  "compiled_bytecode_replay": "PASS"
+}

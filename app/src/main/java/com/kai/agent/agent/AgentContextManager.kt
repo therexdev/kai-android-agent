@@ -48,6 +48,14 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
         fun fits(m: List<InferenceMessage>,ratio: Double=1.0,shortOutput: Boolean=false)=m.size<=96 &&
             m.sumOf { it.content.length.toLong() }<=InferenceClient.MAX_INPUT_CHARS &&
             size(m)<=bytes*ratio && InferenceBudget.estimate(m)*calibration<=(if(shortOutput && config.provider==ProviderId.KOINOS) minimumTokens else tokens)*ratio
+        if(minimumLevel>=2 && context.progressContext!=null) {
+            val stable=context.project(minimumLevel)
+            if(fits(stable,shortOutput=true)) {
+                lastEstimate=InferenceBudget.estimate(stable)
+                NativeToolWire.validate(stable,config.nativeTools)
+                return stable
+            }
+        }
         val full=context.fullMessages();val before=size(full)
         if(minimumLevel==0 && fits(full,0.8)) { lastEstimate=InferenceBudget.estimate(full);return full }
         onChange(Change("pruning",before,before,false))
@@ -56,9 +64,22 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
             lastEstimate=InferenceBudget.estimate(selected)
             onChange(Change("pruned",before,size(selected),false));return selected
         }
+        // Canonical goal/evidence/operation state already supplies a deterministic working set.
+        // Do not pay for a summary that cannot replace these records or authorize an action.
+        if(context.progressContext!=null) {
+            selected=context.project(maxOf(2,minimumLevel))
+            if(!fits(selected)) { selected=context.project(3);minimumLevel=3 }
+            if(fits(selected,shortOutput=true)) {
+                minimumLevel=maxOf(2,minimumLevel)
+                lastEstimate=InferenceBudget.estimate(selected)
+                NativeToolWire.validate(selected,config.nativeTools)
+                onChange(Change("canonical_projection",before,size(selected),false))
+                return selected
+            }
+        }
         // At most two bounded summary attempts per active run. Always summarize original records,
         // never repeatedly summarize a lossy summary or replace an exact operation receipt.
-        if(context.oldCount>0 && attempts<2 && (summary.isBlank() || context.oldCount>=summarizedThrough+8)) {
+        if(context.progressContext==null && context.oldCount>0 && attempts<2 && (summary.isBlank() || context.oldCount>=summarizedThrough+8)) {
             attempts++
             onChange(Change("summarizing",before,size(selected),false))
             val maxInput=minOf(24_000,maxOf(600,(tokens*1.5).toInt()))

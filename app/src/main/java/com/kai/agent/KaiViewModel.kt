@@ -646,7 +646,7 @@ class KaiViewModel(
                 projectId=currentConversation.projectId,temporary=currentConversation.temporary,
                 privacyRevision=ExecutionRunRepository.privacy(state,cid),createdAt=latestUser?.createdAt ?: now(),modelRoute=route,protocol=protocol,budget=RunBudget(maxModelSteps=TaskComplexity.modelSteps(userText),inference=InferenceLedger.allowance(false,state.settings.creditAccount.runCreditLimit)))
         val admittedRecord=record.copy(modelRoute=route,protocol=protocol,archive=RunReplay.archive(record,route,protocol),budget=if(resumeId!=null && continuation==null && (record.budget.exhausted || record.failure==FailureCode.BUDGET || answerOnly))
-            record.budget.extend(false,state.settings.creditAccount.runCreditLimit,answerOnly) else record.budget)
+            record.budget.extend(false,state.settings.creditAccount.runCreditLimit,answerOnly) else record.budget,progress=if(resumeId!=null && continuation==null) record.progress.continued() else record.progress)
         suspend fun resolveKnownTool(account: String,id: String): ConnectionTool? {
             knownTools[toolKey(account,id)]?.let { return it }
             val ref=record.tools.lastOrNull { it.account==account && it.tool==id } ?: return null
@@ -671,7 +671,7 @@ class KaiViewModel(
         if(continuation!=null && validCheckpoint?.intent!=null) {
             val intent=validCheckpoint.intent
             val tool=toolRouter.tool(intent.toolName,intent.toolVersion)
-            if(!tool.readOnly && tool.schemaJson==intent.toolSchemaJson) runtime.mark("effect_recorded",validCheckpoint.id)
+            if(tool.schemaJson==intent.toolSchemaJson) runtime.serviceReceipt(validCheckpoint.id,tool.readOnly,validCheckpoint.status)
         }
         val contextManager=com.kai.agent.agent.AgentContextManager()
         suspend fun saveProgress() {
@@ -681,8 +681,11 @@ class KaiViewModel(
                 .map { ToolReference(account,it.id,it.version) } }
             runtime.checkpoint(context.archive(),GoalProgress.retainedTools(runtime.record.tools.filter { it.account in activeAccounts },loaded))
         }
+        val progressSession=runtime
+        var progressDecision: AgentDecision?=null
         suspend fun appendContext(assistant: String, runtime: String, compact: String = runtime) {
             trace?.record("runtime_result",JSONObject().put("modelProposal",assistant).put("result",runtime).put("compactResult",compact))
+            progressSession.observeProgress(progressDecision,runtime)
             context.append(assistant,runtime,compact,if(harness.native) harness.exchange(assistant,runtime) else null)
             saveProgress()
         }
@@ -704,7 +707,7 @@ class KaiViewModel(
             require(tool.schemaJson==intent.toolSchemaJson) { "The approved schema changed; a new review is required." }
             runtime.check()
             val result=executeTask(pending.id,tool)
-            if(!tool.readOnly) runtime.mark("effect_recorded",pending.id)
+            runtime.serviceReceipt(pending.id,tool.readOnly,store.state.value.tasks.first { it.id==pending.id }.status)
             val summary=com.kai.agent.agent.ToolResultSummary.parseExecution(result,tool.readOnly,com.kai.agent.diagnostics.DiagnosticRedactor(store.state.value.settings)::text)
             context.appendOutcome("Phone result for the previously approved action; not a new proposal:\n"+summary.modelData)
             saveProgress()
@@ -712,6 +715,7 @@ class KaiViewModel(
         val responseRecovery = com.kai.agent.agent.AgentResponseRecovery()
         val toolRecovery = com.kai.agent.agent.AgentToolRecovery()
         runtime.drive {
+            progressDecision=null
             ensureActiveTurn(epoch)
             saveProgress()
             val partial = StringBuilder()
@@ -753,10 +757,11 @@ class KaiViewModel(
                         if (!draft.finished && foreground && ui.value.voiceEnabled) voice.appendSpeech(draft.messageId, deltaText)
                     }
                 }
+                runtime.reserveCompletion()
                 if(web.exhausted || answerOnly) context.appendOutcome(if(answerOnly) "Answer now from retained observations only. No new tools, searches or writes are allowed. State evidence limits and unfinished work honestly." else web.budgetSummary)
-                val baseConfig = harness.config(responseRecovery.requestConfig(config), snapshot?.accounts.orEmpty().filter { it.active }.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account.id,it.id)] == it }.map { account.id to it } },webAvailable=!web.exhausted)
+                val baseConfig = harness.config(responseRecovery.requestConfig(config), snapshot?.accounts.orEmpty().filter { it.active }.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account.id,it.id)] == it }.map { account.id to it } },webSearchAvailable=web.searchAvailable && !runtime.record.progress.collectionClosed,webReadAvailable=web.readAvailable && !runtime.record.progress.collectionClosed)
                 val requestConfig=if(answerOnly) baseConfig.copy(tools=emptyList(),maxOutputTokens=minOf(baseConfig.maxOutputTokens,2048)) else baseConfig
-                context.progressContext=GoalProgress.render(store.state.value.tasks,runtime.record,runtime.record.tools)
+                context.progressContext=GoalProgress.render(store.state.value.tasks,runtime.record,runtime.record.tools,web.searchAvailable,web.readAvailable)
                 val working = contextManager.prepare(context,requestConfig,
                     summarize={ c,m ->
                         if(answerOnly) throw RunBudgetExceeded("Final answers use retained findings without another summary call.")
@@ -805,6 +810,7 @@ class KaiViewModel(
                     mutableUi.update { it.copy(streamingText = "Rechecking the model response…") }
                     return@drive
                 }
+                progressDecision=decision
                 if(answerOnly && decision !is AgentDecision.Reply) {
                     appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED,web.budgetSummary)
                     return@drive
@@ -824,6 +830,10 @@ class KaiViewModel(
                     runtime.finish(ExecutionState.PARTIAL,"Document needs further work")
                     reply(cid, check.fallback, epoch)
                     replyCommitted = true
+                    return@drive
+                }
+                web.admission(decision,runtime.record.progress.collectionClosed)?.let { denied ->
+                    appendContext(completion.text,denied)
                     return@drive
                 }
                 web.correction(decision)?.let { correction ->
@@ -967,6 +977,7 @@ class KaiViewModel(
                             store.approveTask(task.id)
                             val result = try {
                                 val raw = executeTask(task.id, tool)
+                                runtime.serviceReceipt(task.id,tool.readOnly,store.state.value.tasks.first { it.id==task.id }.status)
                                 targetEvidence.observeResult(decision.accountId, tool.toolkit, raw)
                                 val summary = com.kai.agent.agent.ToolResultSummary.parseExecution(raw, tool.readOnly, com.kai.agent.diagnostics.DiagnosticRedactor(store.state.value.settings)::text)
                                 JSONObject().put("source", "phone_read_result").put("accountId", decision.accountId)
@@ -998,7 +1009,7 @@ class KaiViewModel(
                 }
             }
         }
-        if(runtime.record.state==ExecutionState.PARTIAL && runtime.record.failure==FailureCode.BUDGET) reply(cid,runtime.record.detail+" Continue the run or ask for the findings collected so far.",epoch)
+        if(runtime.record.state==ExecutionState.PARTIAL && runtime.record.failure in setOf(FailureCode.BUDGET,FailureCode.NO_PROGRESS)) reply(cid,runtime.record.detail+" Continue the run or ask for the findings collected so far.",epoch)
         } finally { runtime.release();if(activeChatExecutionId==runtime.record.id) activeChatExecutionId=null }
     }
 
@@ -1045,7 +1056,7 @@ class KaiViewModel(
                 val effectSession=associated?.let { runController.open(it) }
                 var rawResult: String?=null
                 if(effectSession==null) rawResult=executeTask(id,tool) else effectSession.settleEffect {
-                    try { rawResult=executeTask(id,tool);mark("effect_recorded",id);finish(ExecutionState.PAUSED,"Action recorded. Remaining work can continue.") }
+                    try { rawResult=executeTask(id,tool);serviceReceipt(id,tool.readOnly,store.state.value.tasks.first { it.id==id }.status);finish(ExecutionState.PAUSED,"Action recorded. Remaining work can continue.") }
                     catch(e: Exception) {
                         withContext(NonCancellable) { finish(if(store.state.value.tasks.first { it.id==id }.status==TaskStatus.UNKNOWN) ExecutionState.RECONCILING else ExecutionState.FAILED,"Check the action outcome in Tasks.") }
                         throw e

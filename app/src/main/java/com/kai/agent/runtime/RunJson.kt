@@ -13,6 +13,7 @@ object RunJson {
             .put("input",r.budget.inputTokens).put("output",r.budget.outputTokens).put("corrections",r.budget.corrections)
             .put("maxSteps",r.budget.maxModelSteps).put("maxOutput",r.budget.maxOutputTokens).put("inference",InferenceLedgerJson.write(r.budget.inference)))
         .put("research",com.kai.agent.web.ResearchEvidenceJson.write(r.research))
+        .put("progress",RunProgressJson.write(r.progress))
         .put("tools",JSONArray(r.tools.map { JSONObject().put("account",it.account).put("tool",it.tool).put("version",it.version) }))
         .put("observations",JSONArray(r.observations.map { JSONObject().put("id",it.id).put("stepId",it.stepId).put("content",it.content).put("createdAt",it.createdAt) }))
         .put("artifacts",JSONArray(r.artifacts.map { JSONObject().put("id",it.id).put("version",it.version).put("text",it.text).put("sources",JSONArray(it.sourceUrls)).put("createdAt",it.createdAt).put("kind",it.kind) }))
@@ -35,6 +36,7 @@ object RunJson {
                 RunArtifact(x.getString("id"),x.getInt("version"),x.getString("text"),(0 until urls.length()).map(urls::getString),x.getLong("createdAt"),x.getString("kind")) } }.orEmpty(),
             detail=o.optString("detail"),failure=o.optString("failure").takeIf { it.isNotBlank() }?.let { enumValueOf<FailureCode>(it) },
             events=list("events") { RunEvent(it.getLong("sequence"),it.getLong("at"),it.getString("kind"),it.optString("code")) },
+            progress=if(o.has("progress")) RunProgressJson.read(o.getJSONObject("progress")) else RunProgress(),
             research=if(o.has("research")) com.kai.agent.web.ResearchEvidenceJson.read(o.getJSONObject("research")) else com.kai.agent.web.ResearchEvidence(legacy=o.getString("archive")!="[]"))
     }
 }

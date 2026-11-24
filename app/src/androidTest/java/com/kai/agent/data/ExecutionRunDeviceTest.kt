@@ -49,6 +49,8 @@ class ExecutionRunDeviceTest {
                 .put("url","https://example.test/source").put("requestedUrl","https://example.test/source")
                 .put("requestKey","page:https://example.test/source").put("text",quotation).put("truncated",false))
             session.recordFindings(listOf(com.kai.agent.web.FindingProposal("private-sentinel-claim","s1_0",quotation)))
+            repeat(3) { i -> session.observeProgress(com.kai.agent.agent.AgentDecision.ReadWebPage("https://example.test/source"),
+                """{"kind":"page","status":"ok","requestKey":"page:https://example.test/source","budget":"changing $i"}""") }
             first.close()
             val bytes=File(context.noBackupFilesDir,"kai-state/memory.db").readBytes().toString(Charsets.ISO_8859_1)
             assertFalse(bytes.contains("private-sentinel"))
@@ -60,12 +62,14 @@ class ExecutionRunDeviceTest {
                 assertEquals("private-sentinel-draft",restored.artifacts.single().text)
                 assertEquals(quotation,restored.research.findings.single().quote)
                 assertEquals("s1_0",restored.research.sources.single().id)
+                assertTrue(restored.progress.collectionClosed);assertEquals(2,restored.progress.stalled)
                 assertEquals("",restored.owner)
                 assertTrue(reopened.state.value.tasks.isEmpty())
                 reopened.updateSettings { it.copy(useMemory=false) }
                 val invalid=reopened.state.value.executions.single()
                 assertEquals(ExecutionState.CANCELLED,invalid.state);assertEquals("[]",invalid.archive);assertTrue(invalid.artifacts.isEmpty())
                 assertTrue(invalid.research.receipts.isEmpty());assertTrue(invalid.research.findings.isEmpty())
+                assertEquals(RunProgress(),invalid.progress)
             } finally { reopened.close() }
         }
     }

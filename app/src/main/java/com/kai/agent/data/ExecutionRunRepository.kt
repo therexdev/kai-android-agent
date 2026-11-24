@@ -55,7 +55,7 @@ class ExecutionRunRepository(private val store: KaiStore): RunRepository {
                     if(tasks.any { it.status in setOf(TaskStatus.RUNNING,TaskStatus.UNKNOWN) }) return@mapNotNull r.copy(state=ExecutionState.RECONCILING,detail="Check the action outcome in Tasks.",revision=r.revision+1)
                     if(tasks.isNotEmpty() && tasks.none { it.status in setOf(TaskStatus.AWAITING_APPROVAL,TaskStatus.READY) }) return@mapNotNull r.copy(state=ExecutionState.PAUSED,detail="Action review finished or changed. Continue from saved progress.",revision=r.revision+1)
                 }
-                if(!invalid) r else r.copy(archive="[]",tools=emptyList(),artifacts=emptyList(),observations=emptyList(),research=com.kai.agent.web.ResearchEvidence(),owner="",state=ExecutionState.CANCELLED,
+                if(!invalid) r else r.copy(archive="[]",tools=emptyList(),artifacts=emptyList(),observations=emptyList(),research=com.kai.agent.web.ResearchEvidence(),progress=RunProgress(),owner="",state=ExecutionState.CANCELLED,
                     goal=GoalContract("Private context removed"),detail="Context changed; old run cannot resume.",events=emptyList(),revision=r.revision+1)
             }
             return next.copy(executions=kept)

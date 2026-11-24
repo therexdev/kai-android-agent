@@ -79,13 +79,17 @@ class NativeHarnessTest {
         assertTrue(restored.checkpoint().contains("real research"));assertFalse(restored.checkpoint().contains("private memory"))
     }
 
-    @Test fun loopGuardAllowsChangedResultsAndStopsAnUnchangedLoop() {
-        val proposal=Completion("""{"type":"web_search","query":"blockchain projects"}""","stop")
-        val progress=AgentHarness(false)
-        repeat(6) { i -> progress.parse(proposal,AgentResponseRecovery());progress.exchange(proposal.text,"Different evidence $i") }
-        val stuck=AgentHarness(false)
-        repeat(3) { stuck.parse(proposal,AgentResponseRecovery());stuck.exchange(proposal.text,"Same result") }
-        assertTrue(runCatching { stuck.parse(proposal,AgentResponseRecovery()) }.exceptionOrNull() is AgentResponseException)
+    @Test fun repeatProgressIsRunOwnedAndIndependentOfTheWireParser() {
+        val proposal=Completion("""{"type":"read_context","entryId":"findings"}""","stop")
+        val harness=AgentHarness(false)
+        var progress=com.kai.agent.runtime.RunProgress()
+        repeat(7) {
+            val decision=harness.parse(proposal,AgentResponseRecovery())
+            progress=progress.observe(decision,"Same result")
+            harness.exchange(proposal.text,"Same result")
+        }
+        assertEquals(6,progress.stalled)
+        assertEquals(0,progress.observe(AgentDecision.ReadContext("findings"),"New findings").stalled)
     }
 
     @Test fun deferredRegistryBudgetIncludesDescriptionsAndUtf8SchemaBytes() {

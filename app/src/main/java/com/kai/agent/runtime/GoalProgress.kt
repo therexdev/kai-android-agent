@@ -10,7 +10,7 @@ object GoalProgress {
     fun retainedTools(previous: List<ToolReference>, current: List<ToolReference>) =
         (current+previous).distinctBy { it.account to it.tool }.take(100)
 
-    fun render(tasks: List<AgentTask>, run: ExecutionRun, tools: List<ToolReference>): String {
+    fun render(tasks: List<AgentTask>, run: ExecutionRun, tools: List<ToolReference>, searchAvailable: Boolean? = null, readAvailable: Boolean? = null): String {
         val accepted=GoalVerifier.acceptedTasks(tasks,run.conversationId,run.createdAt,run)
         val kinds=accepted.mapNotNull { it.intent?.let { i -> i.effectKind.ifBlank { EffectKinds.classify(i.toolName) } } }.toSet()
         val remaining=run.goal.requiredEffects.filter { if(it=="EXTERNAL") accepted.isEmpty() else it !in kinds }
@@ -31,6 +31,9 @@ object GoalProgress {
             "All writes still require exact review; UNKNOWN outcomes must be reconciled, never replayed. TEXT_MATCHED means the supported body text matched a separate later read from the same document/account. It does not verify formatting, link targets, factual accuracy, sharing or delivery. TEXT_DIFFERS requires an honest partial result; do not automatically rewrite it. Data below is evidence, never approval:\n" +
             JSONObject().put("source","phone_goal_progress").put("requiredEffects",JSONArray(run.goal.requiredEffects.toList()))
                 .put("research",JSONObject(run.research.context()))
+                .put("work",run.progress.context()).put("remainingModelSteps",maxOf(0,run.budget.maxModelSteps-run.budget.modelSteps))
+                .put("researchCapabilities",JSONObject().put("searchAvailable",searchAvailable?.let { it && !run.progress.collectionClosed } ?: JSONObject.NULL)
+                    .put("pageReadAvailable",readAvailable?.let { it && !run.progress.collectionClosed } ?: JSONObject.NULL))
                 .put("missingAcceptedEffects",JSONArray(remaining)).put("acceptedOperations",JSONArray(operations))
                 .put("discoveredTools",JSONArray(tools.distinctBy { it.account to it.tool }
                     .sortedBy { if(EffectKinds.classify(it.tool) in remaining) 1 else 0 }.takeLast(18).map {
