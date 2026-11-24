@@ -1,0 +1,14 @@
+{
+  "package": "com.kai.agent.preview",
+  "version_name": "0.5.10",
+  "version_code": 50,
+  "abis": [
+    "arm64-v8a"
+  ],
+  "certificate_sha256": "a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89",
+  "sha256": "6f47626c9df1f77ddd6e8de45cf3cf4c925014e10ff423deebe7e70e953301fa",
+  "size_bytes": 125784011,
+  "zip_alignment_16kb": true,
+  "frozen_source_files": 733,
+  "source_drift": false
+}

@@ -206,19 +206,23 @@ class TaskAgentEngine(
                     braveKey=store.state.value.settings.braveSearchApiKey, smallContext=smallContext,
                     prior=requireNotNull(runtime).record.observations.flatMap { listOf(InferenceMessage("assistant","Earlier phone observation"),InferenceMessage("user",it.content)) },
                     trustedResults=record.research.receipts.map { it.result },onResult={ recordResearch(it) })
-                val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) },webSearchAvailable=web.searchAvailable,webReadAvailable=web.readAvailable)
-                val nativeConfig=baseConfig
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
                 if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
                 contextManager.restoreSummary(step.contextSummary)
                 val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) })
                 turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
                     step.tools.map { ToolReference(it.accountId,it.toolId,it.version) },web.searchAvailable,web.readAvailable)
-                val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> infer(c,m,InferencePurpose.SUMMARY) { complete(c,m) } },onChange={ change ->
+                val availableTools=step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) }
+                val request=contextManager.request(turnContext,configure={ toolBytes ->
+                    harness.config(responseRecovery.requestConfig(config()),availableTools,
+                        webSearchAvailable=web.searchAvailable,webReadAvailable=web.readAvailable,maxToolBytes=toolBytes)
+                },summarize={ c,m -> infer(c,m,InferencePurpose.SUMMARY) { complete(c,m) } },onChange={ change ->
                     currentCoroutineContext().ensureActive()
-                    trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
+                    trace?.record("context_compaction",change.json())
                     store.editRun(id,token) { it.copy(detail="Optimizing context…") }
                 })
+                val nativeConfig=request.config
+                val working=request.messages
                 if(revision(current())!=contextRevision) return@drive
                 editStep { if(it.contextRevision==contextRevision) it.copy(contextSummary=contextManager.summaryCheckpoint()) else it }
                 val completion=try { withTimeout(minOf(InferenceTimeoutPolicy.taskTurnMillis(nativeConfig.provider),(timeBudgetMillis-(android.os.SystemClock.elapsedRealtime()-started)).coerceAtLeast(1))) {

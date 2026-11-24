@@ -7,7 +7,15 @@ import org.json.JSONObject
 
 /** Prune consumed observations, then summarize, while retaining canonical phone-owned task records. */
 class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
-    data class Change(val stage: String,val beforeBytes: Int,val afterBytes: Int,val summaryUsed: Boolean)
+    data class Change(val stage: String,val beforeBytes: Int,val afterBytes: Int,val summaryUsed: Boolean,
+        val protectedMessageBytes: Int?=null,val toolSchemaBytes: Int?=null,val continuationBytes: Int?=null) {
+        fun json()=JSONObject().put("stage",stage).put("beforeBytes",beforeBytes).put("afterBytes",afterBytes).put("summaryUsed",summaryUsed).also { o ->
+            protectedMessageBytes?.let { o.put("protectedMessageBytes",it) }
+            toolSchemaBytes?.let { o.put("toolSchemaBytes",it) }
+            continuationBytes?.let { o.put("continuationBytes",it) }
+        }
+    }
+    data class Request(val config: ProviderConfig,val messages: List<InferenceMessage>)
     private var minimumLevel=0
     private var overflowRetries=0
     private var calibration=1.0
@@ -15,6 +23,37 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
     private var summary=""
     private var summarizedThrough=0
     private var attempts=0
+
+    private fun messageBytes(messages: List<InferenceMessage>)=JSONArray(messages.map(NativeToolWire::messageJson)).toString().toByteArray().size
+    private fun toolBytes(config: ProviderConfig)=if(config.tools.isEmpty()) 0 else JSONArray(config.tools.map(NativeToolWire::toolJson)).toString().toByteArray().size
+    private fun payloadLimit(config: ProviderConfig)=when { config.accountSession -> 60_000; config.provider==ProviderId.KOINOS -> 120_000; else -> 256_000 }
+    private fun window(config: ProviderConfig)=config.contextTokens ?: if(config.provider==ProviderId.KOINOS) 4096 else 16_384
+    private fun output(config: ProviderConfig)=minOf(config.maxOutputTokens,config.modelOutputLimit ?: 8192,8192,window(config)/4).coerceAtLeast(1)
+
+    /** Select optional function schemas inside the same budget as the protected messages.
+     * This is request construction, not a new inference attempt or lossy result projection. */
+    suspend fun request(context: AgentTurnContext,
+        configure: (Int)->ProviderConfig,
+        summarize: suspend (ProviderConfig,List<InferenceMessage>)->Completion,
+        onChange: suspend (Change)->Unit = {}): Request {
+        var selected=configure(24_000)
+        val protected=context.project(3)
+        val protectedBytes=messageBytes(protected)
+        val schemas=toolBytes(selected)
+        onChange(Change("request_components",payloadLimit(selected),protectedBytes+schemas+(if(schemas>0) 64 else 0),false,
+            protectedBytes,schemas,protected.sumOf { it.providerReplay?.token?.toByteArray()?.size ?: 0 }))
+        if(selected.nativeTools && selected.tools.isNotEmpty()) {
+            val generation=if(selected.provider==ProviderId.KOINOS) minOf(output(selected),256) else output(selected)
+            val tokens=window(selected)-512-generation-kotlin.math.ceil(InferenceBudget.estimate(protected)*calibration).toInt()
+            val budget=minOf(24_000,payloadLimit(selected)-protectedBytes-64,tokens*3-64).coerceAtLeast(0)
+            val before=toolBytes(selected)
+            if(before>budget) {
+                selected=configure(budget)
+                onChange(Change("tool_registry",before,toolBytes(selected),false))
+            }
+        }
+        return Request(selected,prepare(context,selected,summarize,onChange))
+    }
 
     fun restoreSummary(raw: String) {
         if(raw.isBlank()) return
@@ -36,15 +75,15 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
         summarize: suspend (ProviderConfig,List<InferenceMessage>)->Completion,
         onChange: suspend (Change)->Unit = {}): List<InferenceMessage> {
         if(context.summary.isNotBlank() && summary.isBlank()) { summary=context.summary;summarizedThrough=context.summaryThrough }
-        val tools=if(config.tools.isEmpty()) 0 else JSONArray(config.tools.map(NativeToolWire::toolJson)).toString().toByteArray().size+64
-        val window=config.contextTokens ?: if(config.provider==ProviderId.KOINOS) 4096 else 16_384
-        val output=minOf(config.maxOutputTokens,config.modelOutputLimit ?: 8192,8192,window/4).coerceAtLeast(1)
+        val tools=if(config.tools.isEmpty()) 0 else toolBytes(config)+64
+        val window=window(config)
+        val output=output(config)
         val tokens=(window-512-output-(tools+2)/3).coerceAtLeast(0)
         // Koinos request planning can reduce generation space to 256 tokens for a pinned
         // exchange. Preserve that existing small-window behavior after stronger compaction.
         val minimumTokens=(window-512-minOf(output,256)-(tools+2)/3).coerceAtLeast(0)
-        val bytes=when { config.accountSession -> 60_000-tools; config.provider==ProviderId.KOINOS -> 120_000-tools; else -> 256_000-tools }
-        fun size(m: List<InferenceMessage>)=JSONArray(m.map(NativeToolWire::messageJson)).toString().toByteArray().size
+        val bytes=payloadLimit(config)-tools
+        fun size(m: List<InferenceMessage>)=messageBytes(m)
         fun fits(m: List<InferenceMessage>,ratio: Double=1.0,shortOutput: Boolean=false)=m.size<=96 &&
             m.sumOf { it.content.length.toLong() }<=InferenceClient.MAX_INPUT_CHARS &&
             size(m)<=bytes*ratio && InferenceBudget.estimate(m)*calibration<=(if(shortOutput && config.provider==ProviderId.KOINOS) minimumTokens else tokens)*ratio

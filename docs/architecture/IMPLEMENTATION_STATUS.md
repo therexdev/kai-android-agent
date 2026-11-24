@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Joint request budgeting (0.5.10)
+
+The 0.5.9 report fails locally before its tenth inference request: broad tool discovery, retained research and native continuation/definitions exceed the combined request allowance. The registry previously used a fixed independent allocation. Preserving the newest result exposed this missing coordination; earlier replay omitted the private continuation data.
+
+Chat and saved-task/routine execution now use `AgentContextManager.request` to reserve protected messages and select native definitions within the remaining byte/token capacity. Current results stay intact; deferred actions remain inspectable, and exact schema/account binding stays authoritative. Numeric diagnostics expose component sizes without private ciphertext. This is a local construction fix, not another retry or a larger allowance. See `docs/JOINT-REQUEST-BUDGET.md` and `qa/0.5.10/VALIDATION.md`; live model completion remains unverified.
+
 ## Current tool result preservation (0.5.9)
 
 The 0.5.8 report reaches two creation proposals, but omits body text both times. The second proposal puts the research in the title. Its preceding action correction was compacted before the model could use it: a 1,500-character projection rule ran ahead of the newest-result exemption and removed the corrective schema. The same path discarded the just-requested archived source excerpt. This violates the existing active-exchange contract and predates 0.5.8.

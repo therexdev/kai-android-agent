@@ -16,12 +16,14 @@ class AgentHarness(val native: Boolean) {
     private var focusedAccount = ""
     private var focusedTool = ""
 
-    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>, webAvailable: Boolean = true, webSearchAvailable: Boolean = webAvailable, webReadAvailable: Boolean = webAvailable): ProviderConfig {
+    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>, webAvailable: Boolean = true, webSearchAvailable: Boolean = webAvailable, webReadAvailable: Boolean = webAvailable, maxToolBytes: Int = 24_000): ProviderConfig {
         if (!native) return config
         bindings.clear()
         val definitions = builtins().filterNot { it.name=="web_search" && !webSearchAvailable || it.name=="read_web_page" && !webReadAvailable }.toMutableList()
         enabledBuiltins=definitions.map { it.name }.toSet()
-        var bytes = definitions.sumOf { NativeToolWire.toolJson(it).toString().toByteArray().size }
+        val budget=maxToolBytes.coerceIn(0,24_000)
+        var bytes = JSONArray(definitions.map(NativeToolWire::toolJson)).toString().toByteArray().size
+        if(bytes>budget) throw InferenceException("The required phone tools and current context cannot fit in one request. Current records and action receipts were preserved.")
         tools.distinctBy { it.first to it.second.id }.asReversed().sortedWith(
             compareByDescending<Pair<String,ConnectionTool>> { it.first==focusedAccount && it.second.id==focusedTool }
                 .thenByDescending { it.first==focusedAccount }
@@ -31,10 +33,14 @@ class AgentHarness(val native: Boolean) {
             val name = "action_$hash"
             val definition=InferenceTool(name,"${tool.name}: ${tool.description.take(300)}. Account: $account. ${if(tool.readOnly) "Read only." else "PREPARE this write for the phone approval card. Calling this function does not execute it; supply complete arguments now, without preliminary chat confirmation."}",tool.schemaJson)
             val size=NativeToolWire.toolJson(definition).toString().toByteArray().size
-            if(bytes+size>24_000) return@forEach
+            if(bytes+size+1>budget) {
+                if(account==focusedAccount && tool.id==focusedTool)
+                    throw InferenceException("The selected action schema and current context cannot fit in one request. Current records and action receipts were preserved.")
+                return@forEach
+            }
             bindings[name] = Binding(account,tool)
             definitions += definition
-            bytes += size
+            bytes += size+1
         }
         return config.copy(tools=definitions)
     }

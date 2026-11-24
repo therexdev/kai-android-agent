@@ -753,18 +753,23 @@ class KaiViewModel(
                     }
                 }
                 if(web.exhausted || answerOnly) context.appendOutcome(if(answerOnly) "Answer now from retained observations only. No new tools, searches or writes are allowed. State evidence limits and unfinished work honestly." else web.budgetSummary)
-                val baseConfig = harness.config(responseRecovery.requestConfig(config), snapshot?.accounts.orEmpty().filter { it.active }.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account.id,it.id)] == it }.map { account.id to it } },webSearchAvailable=web.searchAvailable,webReadAvailable=web.readAvailable)
-                val requestConfig=if(answerOnly) baseConfig.copy(tools=emptyList(),maxOutputTokens=minOf(baseConfig.maxOutputTokens,2048)) else baseConfig
                 context.progressContext=GoalProgress.render(store.state.value.tasks,runtime.record,runtime.record.tools,web.searchAvailable,web.readAvailable)
-                val working = contextManager.prepare(context,requestConfig,
+                val request = contextManager.request(context,configure={ toolBytes ->
+                    val base=responseRecovery.requestConfig(config)
+                    if(answerOnly) base.copy(tools=emptyList(),maxOutputTokens=minOf(base.maxOutputTokens,2048)) else
+                        harness.config(base, snapshot?.accounts.orEmpty().filter { it.active }.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account.id,it.id)] == it }.map { account.id to it } },
+                            webSearchAvailable=web.searchAvailable,webReadAvailable=web.readAvailable,maxToolBytes=toolBytes)
+                },
                     summarize={ c,m ->
                         if(answerOnly) throw RunBudgetExceeded("Final answers use retained findings without another summary call.")
                         runtime.infer(c,m,InferencePurpose.SUMMARY) { inference.stream(c,m) {} }
                     },onChange={ change ->
                         ensureActiveTurn(epoch)
                         mutableUi.update { it.copy(streamingText="Optimizing context…") }
-                        trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
+                        trace?.record("context_compaction",change.json())
                     })
+                val requestConfig=request.config
+                val working=request.messages
                 val completion = try { runtime.infer(requestConfig,working,if(answerOnly) InferencePurpose.FINALIZATION else InferencePurpose.AGENT) { inference.stream(requestConfig, working) { delta ->
                     ensureActiveTurn(epoch)
                     partial.append(delta)

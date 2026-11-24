@@ -1,0 +1,74 @@
+{
+  "source": "User-provided 0.5.9 report; private contents excluded",
+  "reconstruction": "Exact visible initial messages, nine tool exchanges and last observed research progress; missing native definitions and continuation replaced with explicitly synthetic fixtures",
+  "limitations": [
+    "The report omits full native definitions and redacts continuation ciphertext; their exact sizes cannot be recovered",
+    "Visible messages alone can narrowly fit; the native rejection is reproduced with a near-full registry and surrogate continuation lengths",
+    "No provider request, private state import or live completion is claimed"
+  ],
+  "baseline_0_5_9": {
+    "result": "PASS",
+    "fullResearchProgressPreserved": true,
+    "candidate": false,
+    "protectedProjectionBytes": 44077,
+    "surrogateReplayLengths": [
+      516,
+      2052,
+      8196
+    ],
+    "protocolResumeCases": 12,
+    "maximumSurrogateRegistryBytes": 24000,
+    "fullLatestCatalogPreserved": true,
+    "nativeRejections": 6,
+    "largestAcceptedMessagesAndToolsBytes": 42167,
+    "liveCalls": 0,
+    "nativeRegistriesReduced": 0
+  },
+  "candidate_0_5_10": {
+    "result": "PASS",
+    "fullResearchProgressPreserved": true,
+    "candidate": true,
+    "protectedProjectionBytes": 44077,
+    "surrogateReplayLengths": [
+      516,
+      2052,
+      8196
+    ],
+    "protocolResumeCases": 12,
+    "maximumSurrogateRegistryBytes": 24000,
+    "fullLatestCatalogPreserved": true,
+    "nativeRejections": 0,
+    "largestAcceptedMessagesAndToolsBytes": 59859,
+    "liveCalls": 0,
+    "nativeRegistriesReduced": 6
+  },
+  "previous_result_retention": {
+    "result": "PASS",
+    "providerSchemaHasOptionalText": true,
+    "messagesPlusMaximumRegistryBytes": 48015,
+    "sourceReadPreserved": true,
+    "protocolResumeCases": 8,
+    "liveCalls": 0,
+    "bothReportedProposalsStillRejected": true,
+    "latestResultPreserved": true
+  },
+  "earlier_reports": {
+    "result": "PASS",
+    "originalGoalRequiresEffect": true,
+    "reconstructedRegistryOffersDocumentCreate": true,
+    "latestReportResponseRejectedInBothProtocols": true,
+    "existingCorrectionPreservesReviewAndMissingInputContract": true,
+    "liveCalls": 0,
+    "reconstructedRegistryToolCount": 16,
+    "previousSuccessfulDocumentArgumentsPreservedInBothProtocols": true,
+    "previousSuccessfulArgumentsPassCurrentSchema": true
+  },
+  "live_calls": 0,
+  "source_sha256": {
+    "agent/AgentContextManager.kt": "0c97028b61d5e7f73e075c04fbaccf368c42092a4e768c442704b43ca3c1d928",
+    "agent/AgentHarness.kt": "b07dc89786e909ba46adfd6d53b603ef2ae160a78bf9811705efff31032e272d",
+    "agent/AgentTurnContext.kt": "f0860baf8dc5036e7119588ac0be2b76bf4164cb81713739517a643f4ad6416f",
+    "KaiViewModel.kt": "3a864a2969207261080e593c710d674cd765d8cd14dcdab8ac8a47134389f66f",
+    "tasks/TaskAgentEngine.kt": "c5e5a850738f4ebeb8fb992f95e45c4a8c3fce0adb4a4a7e27f1672145ff6a49"
+  }
+}
