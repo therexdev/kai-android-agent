@@ -14,7 +14,7 @@ class NativeHarnessTest {
     private val create=ConnectionTool("GOOGLEDOCS_CREATE_DOCUMENT","Create document","Create a document with body text","googledocs","v1",false,schema)
     private val config=ProviderConfig(ProviderId.OPENAI,"https://example.org","fixture","fixture",nativeTools=true)
     private fun task(args: String="""{"title":"Projects"}""",status: TaskStatus=TaskStatus.ACCEPTED,owner: String="owner"): AgentTask {
-        val intent=ActionIntent(toolName=create.id,accountId="docs",argumentsJson=args,ownerId=owner,connectionGeneration="generation")
+        val intent=ActionIntent(toolName=create.id,accountId="docs",argumentsJson=args,ownerId=owner,connectionGeneration="generation",executionId="run")
         return AgentTask(title="Projects",instructions=request,conversationId="chat",createdAt=101,submittedAt=102,status=status,intent=intent,
             receipts=listOf(ActionReceipt(intent.id,"document_fixture_123",status.name,url="https://docs.google.com/document/d/document_fixture_123/edit",observedAt=103)))
     }
@@ -43,9 +43,12 @@ class NativeHarnessTest {
         val args=JSONObject().put("title","Projects").put("text",body)
         guard.validateAction(create,emptyList(),args)
         val write=task(args.toString());assertNotNull(guard.checkReply(listOf(write))!!.correction)
-        val readIntent=ActionIntent(toolName="GOOGLEDOCS_GET_DOCUMENT_BY_ID",accountId="docs",argumentsJson="""{"documentId":"document_fixture_123"}""",ownerId="owner",connectionGeneration="generation")
-        val data=JSONObject().put("body",JSONObject().put("content",org.json.JSONArray().put(JSONObject().put("textRun",JSONObject().put("content",body)))))
-        val read=task().copy(intent=readIntent,status=TaskStatus.SUCCEEDED,createdAt=104,resultContext=JSONObject().put("data",data.toString()).toString())
+        val readIntent=ActionIntent(toolName="GOOGLEDOCS_GET_DOCUMENT_BY_ID",accountId="docs",argumentsJson="""{"documentId":"document_fixture_123"}""",ownerId="owner",connectionGeneration="generation",executionId="run",readOnly=true)
+        val data=JSONObject().put("documentId","document_fixture_123").put("body",JSONObject().put("content",org.json.JSONArray().put(
+            JSONObject().put("paragraph",JSONObject().put("elements",org.json.JSONArray().put(JSONObject().put("textRun",JSONObject().put("content",body))))))))
+        val read=task().copy(intent=readIntent,status=TaskStatus.SUCCEEDED,createdAt=104,submittedAt=105,
+            receipts=listOf(ActionReceipt(readIntent.id,"document_fixture_123","SUCCEEDED",observedAt=106)),
+            resultContext=JSONObject().put("source","untrusted_connected_app_output").put("reportedStatus","SUCCEEDED").put("truncated",false).put("data",data.toString()).toString())
         assertNull(guard.checkReply(listOf(write,read)))
         val link="Do you have AL\\nInk to the google doc"
         assertTrue(ResourceReuseGuard.linkRequest(link))

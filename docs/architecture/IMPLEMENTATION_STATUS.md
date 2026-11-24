@@ -4,6 +4,14 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Document completion evidence (0.5.3)
+
+The user confirmed the 0.5.2 live research-to-document test on November 24. The production operator also reported the reviewed gateway active, GPT OSS 120B qualified and enabled. These are bounded live results, not qualification of every model or device.
+
+This phase advances KAI-006/039: a shared deterministic Google Docs verifier compares supported approved body text with a later successful read of the same document, account, owner, connection generation and execution. It handles Markdown rendered to plain text, literal body text and supported structured text runs. The newest read wins; truncated, mismatched-scope, unsupported and failed results never establish verification. A conflicting read produces an honest partial outcome without another write. Chat and saved tasks use the same evidence, and the run journal records the write/read task pair. Existing encrypted task records retain the evidence; schema 3 and approval fingerprints are unchanged.
+
+Verification means visible body text matched at the recorded observation time. It does not establish factual accuracy, source entailment, formatting, hyperlink targets, sharing permissions, or delivery. Multi-tab, rich embedded content and generic service adapters remain unfinished. See `qa/0.5.3/VALIDATION.md` for measured checks and `docs/DOCUMENT-VERIFICATION.md` for supported shapes.
+
 ## Native transport phase two (0.5.2)
 
 The 0.5.0 inventory counts below remain historical. This phase adds signed, expiring per-route qualification evidence and a two-turn supplier probe; a plain allowlist no longer enables native calling. Android requires protocol-2 qualification and retains opaque provider continuation through tool exchanges, saved tasks and exact approval resumes. Envelopes are bound to the local account/model route, excluded from exports/diagnostics/retrieval, and cleared when provider wire becomes ineligible. The gateway encrypts supported private provider fields and binds them to the credit owner, model and exact assistant call before signing the response.
@@ -37,7 +45,7 @@ Questions, partial outcomes, waiting approval, pause and failure are separate st
 
 Status counts: {"implemented": 23, "partial": 27, "gated": 1, "planned": 13}. These are inventory counts, not percentage completion or proof that a whole acceptance criterion passed.
 
-The largest unfinished prerequisites are provider-private replay envelopes, live route qualification/native gateway rollout, a priced credit/deadline ledger, claim-level source assurance, generic read-back verification, independent-read concurrency, a complete typed voice reducer, and modern physical Android lifecycle validation. These must precede a production-ready claim.
+The largest unfinished prerequisites are a priced credit/deadline ledger across every model helper, claim-level source assurance, general provider replay formats and wider route qualification, additional read-back adapters, independent-read concurrency, a complete typed voice reducer, and modern physical Android lifecycle validation. Managed GPT OSS continuation/activation and the user-confirmed document scenario now have bounded live evidence; they do not close those broader requirements. These must precede a production-ready claim.
 
 The broader product work remains explicit: portable skills/SDK and revocation manifests; paired code/browser hosts; isolated delegation; cross-device ownership; marketplace/rentals; optional OAuth onboarding; channel adapters; bounded permission grants; and a full visual workflow canvas. None is implied by adding MCP or a workflow JSON editor.
 

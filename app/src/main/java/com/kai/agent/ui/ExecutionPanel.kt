@@ -45,7 +45,7 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
                     MarkdownReply(artifact.text)
                 }
                 run.events.takeLast(8).forEach { event ->
-                    Text(when(event.kind) { "checkpoint" -> "Progress saved"; "step_admitted" -> "Next step started"; "claimed" -> "Run started"; "outcome" -> "Run paused or finished"; else -> event.kind.replace('_',' ') },style=MaterialTheme.typography.bodySmall)
+                    Text(when(event.kind) { "document_text_verified" -> "Document text matched a later read"; "checkpoint" -> "Progress saved"; "step_admitted" -> "Next step started"; "claimed" -> "Run started"; "outcome" -> "Run paused or finished"; else -> event.kind.replace('_',' ') },style=MaterialTheme.typography.bodySmall)
                 }
             }
         }

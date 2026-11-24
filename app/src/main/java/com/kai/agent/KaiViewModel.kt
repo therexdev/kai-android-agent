@@ -808,7 +808,8 @@ class KaiViewModel(
                 if (speechDraft != null) require(decision is AgentDecision.Reply && StreamingReply.complete(completion.text) == decision.text) {
                     "The model changed its reply format while speaking. This response did not start a new action."
                 }
-                if (decision is AgentDecision.Reply) contentGuard.checkReply(store.state.value.tasks, decision.text)?.let { check ->
+                if (decision is AgentDecision.Reply) runtime.documentVerification(contentGuard.verification(store.state.value.tasks))
+                if (decision is AgentDecision.Reply && decision.outcome == com.kai.agent.agent.ReplyOutcome.ANSWER) contentGuard.checkReply(store.state.value.tasks, decision.text)?.let { check ->
                     trace?.record("document_progress_check", JSONObject().put("correction", check.correction ?: JSONObject.NULL).put("fallback", check.fallback))
                     if (check.correction != null && !answerOnly) {
                         appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, check.correction)

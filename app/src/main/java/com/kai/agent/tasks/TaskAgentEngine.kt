@@ -244,7 +244,8 @@ class TaskAgentEngine(
                 val documentGuard=documentGuards.getOrPut("${step.id}:$contextRevision") { DocumentContentGuard(run.goal,run.conversationId,run.createdAt,maxOf(guardState.projects.firstOrNull { it.id==run.projectId }?.forgottenBefore ?: 0,guardState.conversations.firstOrNull { it.id==run.conversationId }?.contextAfter ?: 0),guardState.settings.composioUserId,guardState.settings.connectionGeneration) }
                 val completesDocument = step.id==run.steps.lastOrNull()?.id ||
                     (Regex("(?i)\\bdoc(?:ument)?\\b").containsMatchIn(step.instructions) && Regex("(?i)\\b(create|write|fill|add|insert|save|update)\\b").containsMatchIn(step.instructions))
-                val documentCheck=if(completesDocument && decision is AgentDecision.Reply) documentGuard.checkReply(guardState.tasks,decision.text) else null
+                if(completesDocument && decision is AgentDecision.Reply) documentVerification(documentGuard.verification(guardState.tasks))
+                val documentCheck=if(completesDocument && decision is AgentDecision.Reply && decision.outcome == com.kai.agent.agent.ReplyOutcome.ANSWER) documentGuard.checkReply(guardState.tasks,decision.text) else null
                 if(documentCheck!=null) {
                     if(documentCheck.correction!=null) { append(completion.text,documentCheck.correction); return@drive }
                     run { hold(RunStatus.BLOCKED,documentCheck.fallback); return@drive }

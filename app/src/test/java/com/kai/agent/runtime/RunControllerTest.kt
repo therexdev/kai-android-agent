@@ -70,4 +70,14 @@ class RunControllerTest {
         assertEquals(1,dispatched);assertEquals(ExecutionState.PAUSED,repo.saved?.state)
     }
 
+    @Test fun `document verification journal is idempotent and survives run serialization`()=runTest {
+        val repo=Repository();val session=RunController(repo).open(record())
+        val evidence=listOf("write" to DocumentVerification.Evidence(DocumentVerification.Status.TEXT_MATCHED,"read",123L))
+        session.documentVerification(evidence);session.documentVerification(evidence)
+        session.documentVerification(listOf("other" to DocumentVerification.Evidence()))
+        session.finish(ExecutionState.COMPLETED)
+        val restored=RunJson.read(RunJson.write(requireNotNull(repo.saved)))
+        assertEquals(listOf("write:read"),restored.events.filter { it.kind=="document_text_verified" }.map { it.code })
+    }
+
 }
