@@ -6,7 +6,7 @@ import com.kai.agent.inference.*
 data class ModelProfile(val route: String, val contextTokens: Int?, val outputLimit: Int,
     val nativeTools: Boolean, val protocolVersion: Int = 1, val qualification: String = "advertised") {
     companion object {
-        fun from(c: ProviderConfig) = ModelProfile(RunReplay.route(c),c.contextTokens,c.modelOutputLimit ?: 8192,c.nativeTools)
+        fun from(c: ProviderConfig) = ModelProfile(RunReplay.route(c),c.contextTokens,c.modelOutputLimit ?: 8192,c.nativeTools,if(c.nativeTools) 2 else 1,c.nativeQualificationId.ifBlank { "unqualified" })
     }
 }
 /** Only explicit same-account fallback configurations are accepted; this class never changes credentials. */

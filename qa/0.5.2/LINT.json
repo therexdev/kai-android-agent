@@ -1,0 +1,67 @@
+{
+  "counts": {
+    "Warning": 12
+  },
+  "issues": [
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of org.commonmark:commonmark than 0.32.0 is available: 0.33.0"
+    },
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.5.1"
+    },
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of org.robolectric:robolectric than 4.15.1 is available: 4.18.1"
+    },
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.10.2 is available: 1.11.0"
+    },
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.5.1"
+    },
+    {
+      "id": "NewerVersionAvailable",
+      "severity": "Warning",
+      "message": "A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.5.1"
+    },
+    {
+      "id": "ChromeOsAbiSupport",
+      "severity": "Warning",
+      "message": "Missing x86_64 ABI support for ChromeOS"
+    },
+    {
+      "id": "ViewConstructor",
+      "severity": "Warning",
+      "message": "Custom view `NativeCharacterView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning",
+      "message": "Use the KTX function `createBitmap` instead?"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning",
+      "message": "Use the KTX extension function `String.toUri` instead?"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning",
+      "message": "Use the KTX extension function `String.toUri` instead?"
+    },
+    {
+      "id": "UseKtx",
+      "severity": "Warning",
+      "message": "Use the KTX extension function `String.toUri` instead?"
+    }
+  ]
+}

@@ -89,7 +89,7 @@ class AgentHarness(val native: Boolean) {
         lastRuntime = runtime
         val c = pending.also { pending = null }
         if (!native || c == null || c.toolCalls.isEmpty()) return listOf(InferenceMessage("assistant",assistant),InferenceMessage("user",runtime))
-        return listOf(InferenceMessage("assistant",c.text,toolCalls=c.toolCalls)) + c.toolCalls.map { InferenceMessage("tool",runtime,toolCallId=it.id) }
+        return listOf(InferenceMessage("assistant",c.text,toolCalls=c.toolCalls,providerReplay=c.providerReplay)) + c.toolCalls.map { InferenceMessage("tool",runtime,toolCallId=it.id) }
     }
 
     fun correction(text: String) = if(native) "Phone validation: use one registered function with complete schema-valid arguments, or a plain-text final reply. Earlier receipts remain binding. No action from the rejected response ran. " + text.substringAfter("This is a format correction,", "") else text

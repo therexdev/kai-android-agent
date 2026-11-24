@@ -1,5 +1,6 @@
 package com.kai.agent.account
 
+import com.kai.agent.inference.NativeQualification
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
@@ -66,9 +67,9 @@ class CreditAccountClient(private val origin: String=CREDIT_ORIGIN, private val 
         return AccountOverview(a.id,account.optString("email"),addresses,
             o.optString("selectedWallet").takeUnless { it=="null" }.orEmpty(),credits.getJSONObject("free").getString("available"),
             credits.getJSONObject("purchased").getString("available"),credits.getJSONObject("free").optString("state"),
-            (0 until models.length()).map { i -> val m=models.getJSONObject(i);CreditModel(m.getString("model"),m.optString("label",m.getString("model")),
+            (0 until models.length()).map { i -> val m=models.getJSONObject(i);val q=NativeQualification.read(m);CreditModel(m.getString("model"),m.optString("label",m.getString("model")),
                 m.optBoolean("available"),m.optBoolean("freeEligible"),m.getInt("maxOutput").coerceIn(1,131072),
-                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion"),m.optInt("nativeTools")==1) },
+                m.optInt("contextTokens",4096).coerceIn(1024,2_000_000),m.optString("inputCreditsPerMillion"),m.optString("outputCreditsPerMillion"),q!=null,q?.optString("qualificationId").orEmpty(),q?.optLong("expiresAt") ?: 0) },
             o.optJSONObject("features")?.optInt("koinVault")==1,primary,labels)
     }
 }

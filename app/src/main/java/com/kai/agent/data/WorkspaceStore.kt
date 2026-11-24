@@ -81,7 +81,7 @@ suspend fun KaiStore.finishRunStep(id: String, lease: String, stepId: String, ou
 
 /** The step pointer and exact external intent commit together, before any request can be submitted. */
 suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: ActionIntent, title: String,
-                                      assistantJson: String, readOnly: Boolean, nativeCalls: List<com.kai.agent.inference.ToolCall> = emptyList()): AgentTask = change { state ->
+                                      assistantJson: String, readOnly: Boolean, nativeCalls: List<com.kai.agent.inference.ToolCall> = emptyList(), nativeReplay: com.kai.agent.inference.ProviderReplay? = null): AgentTask = change { state ->
     val run=state.runs.first { it.id==runId }; RunRules.requireOwner(run,lease)
     val step=requireNotNull(run.currentStep); require(step.pendingActionId.isBlank())
     require(step.contextRevision == WorkspaceRules.contextRevision(state,run.projectId,run.conversationId)) { "Project context changed; resume to refresh the task." }
@@ -89,7 +89,7 @@ suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: Acti
     var task=AgentTask(title=title,instructions=run.goal,intent=intent,status=TaskStatus.AWAITING_APPROVAL,
         conversationId=run.conversationId,runId=runId,events=listOf(TaskEvent(status=TaskStatus.AWAITING_APPROVAL,detail="Prepared exact action")))
     if(readOnly) task=TaskRules.approve(task,state.settings)
-    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson,toolCalls=nativeCalls))
+    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson,toolCalls=nativeCalls,providerReplay=nativeReplay))
     val updatedRun=run.copy(steps=run.steps.map { if(it.id==step.id) updatedStep else it },updatedAt=now())
     withRun(state.copy(tasks=state.tasks+task),updatedRun) to task
 }
