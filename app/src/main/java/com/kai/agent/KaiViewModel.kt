@@ -126,7 +126,7 @@ class KaiViewModel(
                     val selected=current.creditAccount
                     val model=overview.models.firstOrNull { it.id==selected.model }
                     current.copy(creditAccount=selected.copy(email=overview.email,
-                        contextTokens=model?.contextTokens ?: selected.contextTokens,maxOutput=model?.maxOutput ?: selected.maxOutput,nativeTools=model?.nativeTools ?: false))
+                        contextTokens=model?.contextTokens ?: selected.contextTokens,maxOutput=model?.maxOutput ?: selected.maxOutput,nativeTools=model?.nativeTools ?: false,nativeQualificationId=model?.nativeQualificationId.orEmpty(),nativeQualifiedUntil=model?.nativeQualifiedUntil ?: 0))
                 }
             }
             mutableUi.update { it.copy(account=it.account.copy(busy=false,overview=overview,message="Balance updated. Purchases made on the website are available here."),providerConnected=true) }
@@ -158,7 +158,7 @@ class KaiViewModel(
     override fun accountSelectModel(id: String) {
         val m=creditOverview?.models?.firstOrNull { it.id==id && it.available } ?: return
         stopGeneration();memoryRuntime.pause()
-        safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(model=m.id,contextTokens=m.contextTokens,maxOutput=m.maxOutput,nativeTools=m.nativeTools)) };memoryRuntime.kick() }
+        safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(model=m.id,contextTokens=m.contextTokens,maxOutput=m.maxOutput,nativeTools=m.nativeTools,nativeQualificationId=m.nativeQualificationId,nativeQualifiedUntil=m.nativeQualifiedUntil)) };memoryRuntime.kick() }
     }
     override fun accountSelectWallet(address: String) {
         if(address.isNotBlank() && creditOverview?.wallets?.contains(address)!=true)return
@@ -692,7 +692,7 @@ class KaiViewModel(
         val inferenceRecovery=InferenceRecovery()
         val modelPolicy=ModelPolicy(creditOverview?.models.orEmpty().filter { it.available && (!state.settings.creditAccount.freeOnly || it.freeEligible) }
             .associateBy { it.id }.let { available -> state.settings.creditAccount.fallbackModels.mapNotNull { available[it] }.map { model ->
-                state.settings.creditAccount.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools).inference()
+                state.settings.creditAccount.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil).inference()
             } })
         // A restart between exact approval and dispatch resumes that same reviewed intent once.
         for(pending in store.state.value.tasks.filter { it.intent?.executionId==runtime.record.id && it.status==TaskStatus.READY && it.submittedAt==null }) {
@@ -933,6 +933,7 @@ class KaiViewModel(
                         EffectGuard.validate(store.state.value.tasks,cid,record.createdAt,decision.accountId,tool,decision.arguments)
                         DraftContent.extract(decision.arguments)?.let { runtime.draft(it,web.sourceUrls) }
                         val task = prepareAction(decision, tool, userText, cid, targetEvidence,runtime.record.id)
+                        if(!tool.readOnly) context.awaiting(completion)
                         if(!tool.readOnly) store.saveActionCheckpoint(task.id, context.checkpoint(), WorkspaceRules.contextRevision(state,currentConversation.projectId,cid),context.archive())
                         if (tool.readOnly) {
                             runtime.check()

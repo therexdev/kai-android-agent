@@ -101,7 +101,7 @@ class TaskAgentEngine(
             .put("runId",runId).put("stepId",current().currentStep?.id.orEmpty()).put("modelProposal",assistant).put("result",runtime))
         this.runtime?.observe(current().currentStep?.id.orEmpty(),runtime)
         editStep { step ->
-            val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId) }
+            val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId,it.providerReplay) }
             require(messages.sumOf { it.content.length.toLong() }<=1_000_000) { "This task’s saved records are full. Existing action receipts remain in Tasks." }
             step.copy(messages=messages,tools=(step.tools+tools).distinctBy { it.accountId+":"+it.toolId }.takeLast(100))
         }
@@ -133,9 +133,9 @@ class TaskAgentEngine(
             val fallbackProfiles=if(account.fallbackModels.isEmpty() && current().steps.none { it.modelId.isNotBlank() }) emptyList() else {
                 val catalog=com.kai.agent.account.CreditAccountClient().overview(account).models.associateBy { it.id }
                 nodeConfigs=catalog.values.filter { it.available && (!account.freeOnly || it.freeEligible) }.associate { model -> model.id to
-                    account.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools).inference() }
+                    account.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil).inference() }
                 account.fallbackModels.mapNotNull { catalog[it] }.filter { it.available && (!account.freeOnly || it.freeEligible) }.map {
-                    account.copy(model=it.id,contextTokens=it.contextTokens,maxOutput=it.maxOutput,nativeTools=it.nativeTools).inference()
+                    account.copy(model=it.id,contextTokens=it.contextTokens,maxOutput=it.maxOutput,nativeTools=it.nativeTools,nativeQualificationId=it.nativeQualificationId,nativeQualifiedUntil=it.nativeQualifiedUntil).inference()
                 }
             }
             nodeCatalogReady=true
@@ -185,6 +185,8 @@ class TaskAgentEngine(
                     }
                 }
                 run=current();step=requireNotNull(run.currentStep)
+                val routeMessages=RunReplay.stepMessages(step.messages,config())
+                if(routeMessages!=step.messages) { run=editStep { it.copy(messages=routeMessages,contextSummary="") };step=requireNotNull(run.currentStep) }
                 if(managedStep!=step.id || harness.native!=config().nativeTools) { smallContext=compactContext(config());harness=AgentHarness(config().nativeTools) }
                 val contextRevision=revision(run)
                 if(step.messages.isEmpty() || step.contextRevision!=contextRevision) {
@@ -202,7 +204,7 @@ class TaskAgentEngine(
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
                 if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
                 contextManager.restoreSummary(step.contextSummary)
-                val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) })
+                val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) })
                 turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
                     step.tools.map { ToolReference(it.accountId,it.toolId,it.version) })
                 val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> complete(c,m) },onChange={ change ->
@@ -221,7 +223,7 @@ class TaskAgentEngine(
                     if(fallback!=null) {
                         selectedConfig=fallback;harness=AgentHarness(fallback.nativeTools)
                         // Route-specific wire is rebuilt from ordinary observations; exact effects remain in Tasks.
-                        editStep { old -> old.copy(messages=old.messages.map { it.copy(role=if(it.role=="tool") "user" else it.role,toolCalls=emptyList(),toolCallId="") }) }
+                        editStep { old -> old.copy(messages=old.messages.map { it.copy(role=if(it.role=="tool") "user" else it.role,toolCalls=emptyList(),toolCallId="",providerReplay=null) }) }
                         mark("model_fallback",error.failureCode.name);return@drive
                     }
                     throw error
@@ -326,7 +328,7 @@ class TaskAgentEngine(
                         DraftContent.extract(decision.arguments)?.let { draft(it,web.sourceUrls) }
                         store.prepareRunAction(id,token,ActionIntent(toolName=tool.id,accountId=ref.accountId,
                             argumentsJson=decision.arguments.toString(),connectionGeneration=toolRouter.generation(ref.accountId),transportId=toolRouter.transport(ref.accountId),readOnly=tool.readOnly,executionId=requireNotNull(runtime).record.id,effectKind=EffectKinds.classify(tool),
-                            ownerId=settings.composioUserId,toolVersion=tool.version,toolSchemaJson=tool.schemaJson),tool.name,completion.text,tool.readOnly,completion.toolCalls)
+                            ownerId=settings.composioUserId,toolVersion=tool.version,toolSchemaJson=tool.schemaJson),tool.name,completion.text,tool.readOnly,completion.toolCalls,completion.providerReplay)
                     }
                 }
             }

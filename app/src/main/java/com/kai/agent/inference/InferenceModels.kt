@@ -19,6 +19,7 @@ data class ProviderConfig(
     val nativeTools: Boolean = false,
     val tools: List<InferenceTool> = emptyList(),
     val allowOutputGrowth: Boolean = true,
+    val nativeQualificationId: String = "",
 ) {
     override fun toString() = "ProviderConfig(provider=$provider, modelId=$modelId, routing=$routing, apiKey=<redacted>)"
 }
@@ -26,7 +27,7 @@ data class ProviderConfig(
 data class ToolCall(val id: String, val name: String, val arguments: String)
 data class InferenceTool(val name: String, val description: String, val parameters: String)
 data class InferenceMessage(val role: String, val content: String, val images: List<String> = emptyList(), val canOmit: Boolean = false, val compactContent: String? = null,
-    val toolCalls: List<ToolCall> = emptyList(), val toolCallId: String = "")
+    val toolCalls: List<ToolCall> = emptyList(), val toolCallId: String = "", val providerReplay: ProviderReplay? = null)
 data class InferenceModel(val id: String, val displayName: String = id, val contextTokens: Int? = null, val automaticContext: Boolean = false) {
     fun contextStatus(): String = when {
         contextTokens == null -> "Context limit not reported; using a conservative 4,096-token budget."
@@ -35,7 +36,7 @@ data class InferenceModel(val id: String, val displayName: String = id, val cont
     }
 }
 data class TokenUsage(val inputTokens: Int, val outputTokens: Int)
-data class Completion(val text: String, val finishReason: String?, val usage: TokenUsage? = null, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList()) {
+data class Completion(val text: String, val finishReason: String?, val usage: TokenUsage? = null, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList(), val providerReplay: ProviderReplay? = null) {
     fun status(config: ProviderConfig): String = "Connected · ${config.modelId}" +
         if (config.provider == ProviderId.KOINOS) activeContextTokens?.let {
             " · API reports active context: ${String.format(java.util.Locale.US, "%,d", it)} tokens."
@@ -45,7 +46,7 @@ data class ConnectionCheck(val models: List<InferenceModel>, val selectedModelAv
 
 sealed interface StreamEvent {
     data class Delta(val text: String) : StreamEvent
-    data class Finished(val finishReason: String?, val usage: TokenUsage?, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList()) : StreamEvent
+    data class Finished(val finishReason: String?, val usage: TokenUsage?, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList(), val providerReplay: ProviderReplay? = null) : StreamEvent
 }
 
 class InferenceException(message: String, val httpStatus: Int? = null, val contextOverflow: Boolean = false,

@@ -7,6 +7,12 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
     private data class Exchange(val assistant: String, val runtime: String, val compactRuntime: String, val wire: List<InferenceMessage>? = null)
     private val initialMessages = initial.toList()
     private var exchanges = emptyList<Exchange>()
+    private var pendingWire: InferenceMessage? = null
+    fun awaiting(completion: com.kai.agent.inference.Completion) {
+        if(completion.toolCalls.isEmpty()) return
+        require(completion.toolCalls.size==1)
+        pendingWire=InferenceMessage("assistant",completion.text,toolCalls=completion.toolCalls,providerReplay=completion.providerReplay)
+    }
     var progressContext: String? = null
     private fun progress() = progressContext?.let { listOf(InferenceMessage("user",it)) }.orEmpty()
 
@@ -51,6 +57,11 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
             require(value is org.json.JSONArray || (value is org.json.JSONObject && value.optInt("version")==2 && value.optJSONArray("entries")!=null)) { "The saved task context could not be read. Its original records and action receipts were retained." }
             val archive=value as? org.json.JSONObject
             val entries=archive?.optJSONArray("entries") ?: value as? org.json.JSONArray ?: org.json.JSONArray()
+            archive?.optJSONObject("pendingWire")?.let { m ->
+                val calls=com.kai.agent.inference.NativeToolWire.Accumulator().apply { add(m.optJSONArray("tool_calls"),false) }.finish()
+                require(m.getString("role")=="assistant" && calls.size==1)
+                pendingWire=InferenceMessage("assistant",m.optString("content"),toolCalls=calls,providerReplay=com.kai.agent.inference.ProviderReplay.read(m))
+            }
             summary=archive?.optString("summary").orEmpty().take(4000)
             summaryThrough=archive?.optInt("summaryThrough") ?: 0
             for(i in 0 until entries.length()) {
@@ -58,7 +69,7 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
                 val wire=e.optJSONArray("wire")?.let { a -> (0 until a.length()).map { j ->
                     val m=a.getJSONObject(j)
                     val calls=com.kai.agent.inference.NativeToolWire.Accumulator().apply { add(m.optJSONArray("tool_calls"),false) }.finish()
-                    InferenceMessage(m.getString("role"),m.optString("content"),toolCalls=calls,toolCallId=m.optString("tool_call_id"))
+                    InferenceMessage(m.getString("role"),m.optString("content"),toolCalls=calls,toolCallId=m.optString("tool_call_id"),providerReplay=com.kai.agent.inference.ProviderReplay.read(m))
                 } }
                 exchanges=exchanges+Exchange(e.optString("proposal"),e.getString("result"),e.optString("compact",e.getString("result")),wire)
             }
@@ -69,7 +80,11 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
         e.wire ?: listOf(InferenceMessage("assistant",e.assistant),InferenceMessage("user",e.runtime))
     }
     fun priorResults(): List<InferenceMessage> = exchanges.flatMap { listOf(InferenceMessage("assistant",it.assistant),InferenceMessage("user",it.runtime)) }
-    fun appendOutcome(runtime: String) = append("Phone result from the previously approved action; not a new proposal.",runtime)
+    fun appendOutcome(runtime: String) {
+        val pending=pendingWire
+        append("Phone result from the previously approved action; not a new proposal.",runtime,wire=pending?.let { listOf(it,InferenceMessage("tool",runtime,toolCallId=it.toolCalls.single().id)) })
+        pendingWire=null
+    }
     val entryCount get() = exchanges.size
     val oldCount get() = maxOf(0,exchanges.size-2)+initialMessages.count { it.canOmit }
 
@@ -82,9 +97,9 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
         while(org.json.JSONArray(selected).toString().length>16_000 && selected.isNotEmpty()) selected.removeAt(0)
         return org.json.JSONArray(selected).toString()
     }
-    fun archive(): String = org.json.JSONObject().put("version",2).put("summary",summary).put("summaryThrough",summaryThrough)
+    fun archive(): String = org.json.JSONObject().apply { pendingWire?.let { put("pendingWire",com.kai.agent.inference.NativeToolWire.persistedMessageJson(it)) } }.put("version",2).put("summary",summary).put("summaryThrough",summaryThrough)
         .put("entries",org.json.JSONArray(exchanges.map { e -> org.json.JSONObject().put("proposal",e.assistant).put("result",e.runtime).apply { if(e.compactRuntime!=e.runtime) put("compact",e.compactRuntime) }
-            .apply { e.wire?.let { put("wire",org.json.JSONArray(it.map(com.kai.agent.inference.NativeToolWire::messageJson))) } } })).toString().also {
+            .apply { e.wire?.let { put("wire",org.json.JSONArray(it.map(com.kai.agent.inference.NativeToolWire::persistedMessageJson))) } } })).toString().also {
             require(it.length<=2_000_000) { "The saved task archive is full. Its exact action receipts remain in Tasks." }
         }
 

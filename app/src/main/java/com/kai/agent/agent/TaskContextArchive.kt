@@ -20,7 +20,7 @@ object TaskContextArchive {
         if(parts.size!=3) return current.read(entryId,offset)
         val archive=when(parts[0]) {
             "task" -> eligible.firstOrNull { it.id==parts[1] }?.let { AgentTurnContext(emptyList(),checkpointSeed=it.contextArchive,managed=true) }
-            "step" -> steps.firstOrNull { it.id==parts[1] }?.let { s -> AgentTurnContext.fromMessages(s.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) }) }
+            "step" -> steps.firstOrNull { it.id==parts[1] }?.let { s -> AgentTurnContext.fromMessages(s.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) }) }
             else -> null
         }
         return archive?.read(parts[2],offset) ?: JSONObject().put("source","phone_context_archive").put("status","NOT_FOUND").toString()

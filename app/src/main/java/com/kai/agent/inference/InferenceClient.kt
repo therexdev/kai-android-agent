@@ -144,12 +144,13 @@ class InferenceClient(client: OkHttpClient? = null,
         var usage: TokenUsage? = null
         var activeContext: Int? = null
         var toolCalls = emptyList<ToolCall>()
+        var providerReplay: ProviderReplay? = null
         try {
         events(config, messages, requestId) { kind,data -> if(trace!=null && pending.size<24) pending.add(kind to data) }.collect { event ->
             drain()
             when (event) {
                 is StreamEvent.Delta -> { text.append(event.text); onDelta(event.text) }
-                is StreamEvent.Finished -> { finishReason = event.finishReason; usage = event.usage; activeContext = event.activeContextTokens; toolCalls = event.toolCalls }
+                is StreamEvent.Finished -> { finishReason = event.finishReason; usage = event.usage; activeContext = event.activeContextTokens; toolCalls = event.toolCalls; providerReplay = event.providerReplay }
             }
         }
         drain()
@@ -157,7 +158,8 @@ class InferenceClient(client: OkHttpClient? = null,
             .put("output",text.toString()).put("toolCalls",JSONArray(toolCalls.map(NativeToolWire::callJson))).put("finishReason",finishReason ?: JSONObject.NULL)
             .put("inputTokens",usage?.inputTokens ?: JSONObject.NULL).put("outputTokens",usage?.outputTokens ?: JSONObject.NULL)
             .put("activeContextTokens",activeContext ?: JSONObject.NULL))
-        return Completion(text.toString(), finishReason, usage, activeContext, toolCalls)
+        require(providerReplay==null || (config.accountSession && config.nativeTools && toolCalls.isNotEmpty())) { "Unexpected provider continuation." }
+        return Completion(text.toString(), finishReason, usage, activeContext, toolCalls, providerReplay)
         } catch(error: Exception) {
             drain()
             trace?.record("model_error",JSONObject().put("requestId",requestId).put("elapsedMs",clockMillis()-started)
@@ -172,6 +174,7 @@ class InferenceClient(client: OkHttpClient? = null,
         validate(config, requireModel = true)
         validateMessages(messages)
         NativeToolWire.validate(messages, config.nativeTools)
+        require(messages.all { it.providerReplay==null || config.accountSession && it.providerReplay.route==com.kai.agent.runtime.RunReplay.route(config) }) { "Provider continuation belongs to a different account or model. Resume from saved findings." }
         require(messages.sumOf { it.images.size } <= 2) { "Attach at most two photos per message." }
         require(config.provider == ProviderId.OPENAI || messages.all { it.images.isEmpty() }) { "Photo analysis needs an OpenAI-compatible vision model. Extracted text works with either provider." }
         messages.forEach { message -> require(message.images.all { message.role == "user" && it.startsWith("data:image/jpeg;base64,") && it.length <= 1000100 && it.substringAfter(',').matches(Regex("[A-Za-z0-9+/=]+")) }) { "Invalid image attachment." } }
@@ -217,12 +220,14 @@ class InferenceClient(client: OkHttpClient? = null,
             .put("omittedMessages",messages.size-prepared.messages.size)
             .put("compactedMessages",prepared.messages.count { item -> messages.none { it.role==item.role && it.content==item.content } })
             .put("messages",JSONArray(prepared.messages.map { NativeToolWire.messageJson(it).put("imageCount",it.images.size) })))
+        require(messages.none { it.providerReplay!=null } || config.accountSession) { "Provider continuation belongs to the managed account route." }
         var payload = body.toString()
         if (config.provider == ProviderId.KOINOS && payload.toByteArray(Charsets.UTF_8).size > 128 * 1024) {
             throw InferenceException("This request exceeds Koinos AI's 128 KB limit. Shorten the conversation or attached content.")
         }
         if(config.tools.isNotEmpty()) {
             require(config.nativeTools) { "This model and gateway have not advertised native tool support." }
+            if(config.accountSession) body.put("native_protocol",2)
             body.put("tools",JSONArray(config.tools.map(NativeToolWire::toolJson))).put("tool_choice","auto").put("parallel_tool_calls",false)
             payload = body.toString()
             require(payload.toByteArray().size <= 128 * 1024) { "The tool schemas exceed the request limit. Discover fewer actions." }
@@ -301,7 +306,7 @@ class InferenceClient(client: OkHttpClient? = null,
                             val text = message?.optString("content")?.takeUnless { it == "null" }.orEmpty()
                             if (text.length > MAX_OUTPUT_CHARS) throw InferenceException("The model response exceeded the supported size.")
                             if (text.isNotEmpty()) { firstContent(); trySendBlocking(StreamEvent.Delta(text)).getOrThrow() }
-                            trySendBlocking(StreamEvent.Finished(choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }, usage(json), activeContext ?: verifiedContext(json), native)).getOrThrow()
+                            trySendBlocking(StreamEvent.Finished(choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }, usage(json), activeContext ?: verifiedContext(json), native, ProviderReplay.read(message,com.kai.agent.runtime.RunReplay.route(config)))).getOrThrow()
                             close()
                             return
                         }
@@ -310,6 +315,7 @@ class InferenceClient(client: OkHttpClient? = null,
                         var tokenUsage: TokenUsage? = null
                         var characters = 0
                         val native = NativeToolWire.Accumulator()
+                        var replay: ProviderReplay? = null
                         SseDecoder.read(responseBody.charStream().buffered()) { frame ->
                             if (frame.trim() == "[DONE]") { finished = true; return@read false }
                             val json = try { JSONObject(frame) } catch (_: Exception) {
@@ -325,6 +331,7 @@ class InferenceClient(client: OkHttpClient? = null,
                                 if(!config.nativeTools && (delta?.has("tool_calls")==true || delta?.has("function_call")==true)) diagnostic("unsupported_tool_format",json)
                                 if(!config.nativeTools) rejectToolCalls(delta)
                                 native.add(delta?.optJSONArray("tool_calls"))
+                                ProviderReplay.read(delta,com.kai.agent.runtime.RunReplay.route(config))?.let { next -> require(replay==null || replay==next) { "Provider continuation changed." }; replay=next }
                                 val value = delta?.optString("content")?.takeUnless { it == "null" }.orEmpty()
                                 characters += value.length
                                 if (characters > MAX_OUTPUT_CHARS) throw InferenceException("The model response exceeded the supported size.")
@@ -338,7 +345,7 @@ class InferenceClient(client: OkHttpClient? = null,
                         }
                         if (isClosedForSend) return
                         if (!finished && reason == null) throw InferenceException("The model stream ended early. The partial response was not completed.")
-                        trySendBlocking(StreamEvent.Finished(reason, tokenUsage, activeContext, native.finish())).getOrThrow()
+                        trySendBlocking(StreamEvent.Finished(reason, tokenUsage, activeContext, native.finish(), replay)).getOrThrow()
                         close()
                     } catch (error: Exception) {
                         if (!isClosedForSend) close(failure(error))
@@ -462,6 +469,7 @@ class InferenceClient(client: OkHttpClient? = null,
         val error=runCatching { JSONObject(body).let { it.optJSONObject("error") ?: it } }.getOrNull()
         val code=error?.optString("code").orEmpty()
         val diagnostics=error?.optJSONObject("diagnostics")
+        if(code=="managed_native_replay_invalid") return InferenceException("The saved model continuation expired or no longer matches this account. Progress and action receipts are saved. Resume from the findings without repeating completed actions.",status,failureCode=com.kai.agent.runtime.FailureCode.UNSUPPORTED)
         if(code in setOf("managed_reasoning_only", "managed_output_exhausted") ||
             code=="managed_empty_output" && diagnostics?.optString("finishReason")=="length") {
             val reasoning=code=="managed_reasoning_only" || (diagnostics?.optInt("reasoningChars") ?: 0)>0

@@ -4,9 +4,15 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.1
+## Test release: 0.5.2
 
-The signed 0.5.1 test APK is distributed directly while its GitHub release upload is pending. The latest published release remains available above.
+The signed 0.5.2 test APK is distributed directly. The latest published release remains available above.
+
+- Requires current gateway qualification evidence before using managed native tools.
+- Preserves encrypted provider continuation through exact approval and saved-task resumes, while excluding it from reports, exports and model summaries.
+- Rejects continuation reuse across account/model routes and keeps completed-action receipts available when switching routes.
+
+Includes the 0.5.1 fixes below. The companion [gateway change](https://github.com/therexdev/kai/pull/108) requires staged deployment and explicit model qualification; installing the APK alone does not activate native routes. See [0.5.2 validation](qa/0.5.2/VALIDATION.md).
 
 - Fixes transient approval dialogs for trusted read-only operations and keeps real write reviews stable during account-label refresh.
 - Moves Report to the very bottom of Settings.
@@ -55,7 +61,7 @@ The phone owns conversation history, memory, task records, files, and permission
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **41**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **42**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 

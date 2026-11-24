@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Native transport phase two (0.5.2)
+
+The 0.5.0 inventory counts below remain historical. This phase adds signed, expiring per-route qualification evidence and a two-turn supplier probe; a plain allowlist no longer enables native calling. Android requires protocol-2 qualification and retains opaque provider continuation through tool exchanges, saved tasks and exact approval resumes. Envelopes are bound to the local account/model route, excluded from exports/diagnostics/retrieval, and cleared when provider wire becomes ineligible. The gateway encrypts supported private provider fields and binds them to the credit owner, model and exact assistant call before signing the response.
+
+This closes bounded managed-route implementation gaps in KAI-010/012/014/015. It does not qualify any live route by itself. General provider replay formats, production activation, live paid-provider/connected-service tests and physical Android validation remain separate gates. See `qa/0.5.2/VALIDATION.md` for actual results and the companion gateway `deploy/koin-mainnet/NATIVE_TOOLS_PHASE2.md` for the operator rollout.
+
 ## Architecture now in code
 
 ```mermaid

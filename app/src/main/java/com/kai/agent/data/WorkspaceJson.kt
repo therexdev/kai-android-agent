@@ -22,10 +22,10 @@ internal object WorkspaceJson {
     private fun step(s: RunStep) = JSONObject().put("id",s.id).put("title",s.title).put("instructions",s.instructions)
         .put("status",s.status.name).put("output",s.output).put("pendingActionId",s.pendingActionId)
         .put("nodeId",s.nodeId).put("modelId",s.modelId).put("kind",s.kind).put("reviewTarget",s.reviewTarget).put("revisions",s.revisions).put("maxRevisions",s.maxRevisions).put("revisionFeedback",s.revisionFeedback).put("turns",s.turns).put("contextRevision",s.contextRevision).put("completedAt",s.completedAt).put("contextSummary",s.contextSummary)
-        .put("messages",array(s.messages.map { com.kai.agent.inference.NativeToolWire.messageJson(com.kai.agent.inference.InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId)) }))
+        .put("messages",array(s.messages.map { com.kai.agent.inference.NativeToolWire.persistedMessageJson(com.kai.agent.inference.InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay)) }))
         .put("tools",array(s.tools.map { JSONObject().put("accountId",it.accountId).put("toolId",it.toolId).put("version",it.version) }))
     private fun readStep(o: JSONObject) = RunStep(o.getString("id"),o.getString("title"),o.getString("instructions"),
-        enumValueOf(o.getString("status")),o.optString("output"),objects(o,"messages").map { RunMessage(it.getString("role"),it.getString("content"), com.kai.agent.inference.NativeToolWire.Accumulator().apply { add(it.optJSONArray("tool_calls"),false) }.finish(),it.optString("tool_call_id")) },
+        enumValueOf(o.getString("status")),o.optString("output"),objects(o,"messages").map { RunMessage(it.getString("role"),it.getString("content"), com.kai.agent.inference.NativeToolWire.Accumulator().apply { add(it.optJSONArray("tool_calls"),false) }.finish(),it.optString("tool_call_id"),com.kai.agent.inference.ProviderReplay.read(it)) },
         objects(o,"tools").map { RunTool(it.getString("accountId"),it.getString("toolId"),it.getString("version")) },
         o.optString("pendingActionId"),o.optInt("turns"),o.optLong("contextRevision",-1),o.optLong("completedAt"),o.optString("contextSummary"),o.optString("nodeId"),o.optString("modelId"),o.optString("kind","AGENT"),o.optString("reviewTarget"),o.optInt("revisions"),o.optInt("maxRevisions",2),o.optString("revisionFeedback"))
     fun run(r: AgentRun) = JSONObject().put("id",r.id).put("title",r.title).put("goal",r.goal)

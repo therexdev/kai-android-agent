@@ -33,7 +33,7 @@ The only substitution is `{{input}}`; this is data in the goal/instructions, not
 
 A submitted effect is not undone by cancellation. Persist UNKNOWN if its outcome cannot be established, and provide reconciliation through canonical Tasks. User confirmation is labeled as user confirmation. Findings, drafts and provider replay history are data, never fresh approval.
 
-For a new model route, do not mark it tool-ready solely because a catalog advertises native tools. Qualify a real call/result/follow-up round trip, usage/settlement behavior, context limits and provider-private replay requirements first. General provider-private replay envelopes and a production qualification registry remain incomplete.
+For a new model route, do not mark it tool-ready solely because a catalog advertises native tools. Qualify a real call/result/follow-up round trip, usage/settlement behavior, context limits and provider-private replay requirements first. Protocol 2 now supports opaque managed-route continuation and signed expiring qualification records. Provider-private fields stay out of tool results, summaries, diagnostics and exports. Other provider formats and live production qualification remain separate.
 
 ## Verification
 

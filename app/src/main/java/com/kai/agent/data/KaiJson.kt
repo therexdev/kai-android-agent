@@ -15,7 +15,7 @@ object KaiJson {
         .put("tasks", array(state.tasks.map(::task)))
         .put("templates",JSONArray(state.templates))
         .put("executions",array(state.executions.filterNot { it.temporary }.map(com.kai.agent.runtime.RunJson::write)))
-        .put("memoryGraph", MemoryGraphJson.encode(state.memoryGraph)), state).toString()
+        .put("memoryGraph", MemoryGraphJson.encode(state.memoryGraph)), state).let { if(includeSecrets) it else com.kai.agent.inference.ProviderReplay.publicCopy(it) }.toString()
 
     fun decode(json: String): KaiState {
         require(json.length <= 32 * 1024 * 1024) { "KAI data exceeds the supported size." }

@@ -38,6 +38,31 @@ class ExecutionRunDeviceTest {
             } finally { reopened.close() }
         }
     }
+    @Test fun nativeContinuationIsEncryptedSurvivesRestartAndIsRemovedFromExportAndForget()=runBlocking {
+        isolated { context ->
+            val token="kr1."+"private_device_fixture".repeat(12)
+            val first=KaiStore(context);first.load()
+            val chat=first.createConversation();val message=first.appendMessage(chat.id,"user","Research a test topic")
+            val turn=com.kai.agent.agent.AgentTurnContext(emptyList(),managed=true)
+            val replay=com.kai.agent.inference.ProviderReplay.read(org.json.JSONObject().put("kai_replay",token).put("kai_replay_route","fixture-route"))
+            turn.awaiting(com.kai.agent.inference.Completion("","tool_calls",toolCalls=listOf(com.kai.agent.inference.ToolCall("call_1","web_search","{}")),providerReplay=replay))
+            val run=ExecutionRun("native",chat.id,message.id,RunOrigin.CHAT,GoalContract(message.text),privacyRevision=ExecutionRunRepository.privacy(first.state.value,chat.id),createdAt=now())
+            RunController(ExecutionRunRepository(first)).open(run).checkpoint(turn.archive())
+            assertFalse(first.exportJson().contains(token));first.close()
+            assertFalse(File(context.noBackupFilesDir,"kai-state/memory.db").readBytes().toString(Charsets.ISO_8859_1).contains(token))
+            val reopened=KaiStore(context)
+            try {
+                reopened.load();val restored=reopened.state.value.executions.single()
+                val resumed=com.kai.agent.agent.AgentTurnContext(emptyList(),checkpointSeed=restored.archive,managed=true)
+                resumed.appendOutcome("ACCEPTED real receipt")
+                assertEquals(replay,resumed.fullMessages().first().providerReplay)
+                assertTrue(reopened.state.value.tasks.isEmpty());assertFalse(reopened.exportChatReport(chat.id).contains(token))
+                reopened.updateSettings { it.copy(useMemory=false) }
+                assertEquals("[]",reopened.state.value.executions.single().archive)
+            } finally { reopened.close() }
+        }
+    }
+
     @Test fun schemaTwoMigrationPreservesPendingApprovalAndSeparateRows()=runBlocking {
         isolated { context ->
             val first=EncryptedKaiDatabase(context)

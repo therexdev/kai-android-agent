@@ -16,11 +16,11 @@ class DiagnosticRedactor(settings: AppSettings) {
     private val routes = listOf(settings.koinos.endpoint, settings.openai.endpoint, settings.connectionsBaseUrl)
         .mapNotNull { runCatching { URI(it).rawPath }.getOrNull() }.filter { it.contains("/r/") }
     private fun sensitive(key: String): Boolean = key.lowercase().replace(Regex("[^a-z0-9]"), "") in setOf(
-        "apikey", "accesskey", "secret", "clientsecret", "password", "passwd", "accesstoken", "refreshtoken",
+        "kaireplay", "kaireplayroute", "reasoning", "reasoningcontent", "apikey", "accesskey", "secret", "clientsecret", "password", "passwd", "accesstoken", "refreshtoken",
         "idtoken", "token", "authorization", "proxyauthorization", "cookie", "setcookie", "credentials",
         "base64", "b64json", "filebytes", "audiobytes", "imagebytes", "dataurl", "privatekey", "secretkey", "xapikey", "authtoken", "apitoken", "oauthtoken", "authentication", "authconfig", "authconfigid", "connectionssessiontoken", "composioapikey", "bravesearchapikey")
     fun text(input: String): String {
-        var value = input
+        var value = input.replace(Regex("kr1\\.[A-Za-z0-9_-]+"),"[provider continuation omitted]")
         secrets.forEach { secret ->
             value = value.replace(secret, "[credential-removed]")
                 .replace(JSONObject.quote(secret).removeSurrounding("\""), "[credential-removed]")

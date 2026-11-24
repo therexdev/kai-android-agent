@@ -10,7 +10,9 @@ object NativeToolWire {
     fun messageJson(message: InferenceMessage) = JSONObject().put("role", message.role).put("content", message.content).apply {
         if (message.toolCalls.isNotEmpty()) put("tool_calls", JSONArray(message.toolCalls.map(::callJson)))
         if (message.toolCallId.isNotBlank()) put("tool_call_id", message.toolCallId)
+        message.providerReplay?.let { put("kai_replay",it.token) }
     }
+    fun persistedMessageJson(message: InferenceMessage) = messageJson(message).apply { message.providerReplay?.let { put("kai_replay_route",it.route) } }
     fun toolJson(tool: InferenceTool) = JSONObject().put("type", "function").put("function",
         JSONObject().put("name",tool.name).put("description",tool.description).put("parameters",JSONObject(tool.parameters)))
     class Accumulator {
@@ -44,6 +46,7 @@ object NativeToolWire {
         val pending = linkedSetOf<String>()
         val used = mutableSetOf<String>()
         messages.forEach { m ->
+            require(m.providerReplay==null || (enabled && m.role=="assistant" && m.toolCalls.isNotEmpty())) { "Provider continuation requires an assistant tool call." }
             require(enabled || (m.toolCalls.isEmpty() && m.toolCallId.isEmpty() && m.role != "tool")) { "Native tools are not advertised by this model and gateway." }
             if (m.role == "tool") {
                 require(m.toolCalls.isEmpty() && pending.remove(m.toolCallId)) { "Orphan or repeated tool result." }
