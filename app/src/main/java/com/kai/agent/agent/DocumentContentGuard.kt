@@ -19,7 +19,7 @@ class DocumentContentGuard(
 ) {
     val text = requestedText(request)
     val generated = text == null && Regex("(?i)\\b(?:google\\s+)?doc(?:ument)?\\b").containsMatchIn(request) &&
-        Regex("(?i)\\b(research|details|description|summarize|summarise|information|projects|look\\s+up)\\b").containsMatchIn(request)
+        Regex("(?i)\\b(research|details|description|summarize|summarise|information|projects|about|article|topic|look\\s+up)\\b").containsMatchIn(request)
     val active get() = text != null || generated
     private var corrections = 0
     data class ReplyCheck(val correction: String? = null, val fallback: String = "")
@@ -78,6 +78,8 @@ class DocumentContentGuard(
             throw ConnectionServiceException("The document was already created. Use its returned ID to add the missing body text; do not create another document.")
     }
 
+    fun hasAcceptedBody(all: List<AgentTask>) = tasks(all).any { accepted(it) && containsText(it) }
+
     fun checkReply(all: List<AgentTask>, replyText: String = ""): ReplyCheck? {
         if (!active) return null
         val relevant = tasks(all)
@@ -92,9 +94,9 @@ class DocumentContentGuard(
             return ReplyCheck(fallback = "The document action has an unconfirmed outcome. Check it in Tasks and Google Docs before retrying; I haven't submitted another update.")
         if (relevant.any { it.status in setOf(TaskStatus.AWAITING_APPROVAL, TaskStatus.READY) })
             return ReplyCheck(fallback = "The document action is awaiting review. Use its approval card to continue; the requested text has not been confirmed saved.")
-        // A specific missing-detail question is not a claim that the task finished.
-        if (replyText.trim().endsWith("?") && !replyText.contains(Regex("\"type\"\\s*:")) &&
-            Regex("(?is)^\\s*(?:(?:which|what)\\s+(?:google\\s+)?(?:document|doc|account|email|folder|title|text|content)\\b|(?:can|could|would)\\s+you\\s+(?:provide|share|specify)\\b)").containsMatchIn(replyText)) return null
+        // The run verifier, rather than wording-specific question exceptions, records partial work.
+        if(replyText.isNotBlank() && !replyText.contains(Regex("\"type\"\\s*:")) &&
+            !com.kai.agent.runtime.GoalVerifier.claimsDocumentCompletion(replyText)) return null
         val creation = relevant.lastOrNull(::created)
         val url = creation?.receipts?.lastOrNull { it.status in setOf("ACCEPTED", "SUCCEEDED") }?.url
             ?.takeIf { ToolResultSummary.displayUrl(it) != null }.orEmpty()

@@ -4,14 +4,20 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Update prepared: 0.4.32
+## Test release: 0.5.0
 
-- Chat and saved tasks now manage context automatically: prune older tool catalogs, summarize older work when needed, retain recent exchanges and retrieve archived details on demand. Approval resumes use a bounded model view instead of inserting the full saved transcript into the prompt. Exact action receipts and duplicate-write guards stay on the phone.
-- One generic native tool harness serves chat and saved tasks. Discovered actions use their exact schemas and connected accounts; approval and execution remain on the phone. Native calling activates only when the authenticated model catalog advertises support. Older gateways retain the bounded JSON protocol.
-- Approval retains the earlier research results. Document receipts preserve returned URLs, link follow-ups reuse existing resources, and duplicate or uncertain creations cannot be replayed automatically.
-- Research document creation checks the body before review, then requests readback or reports that contents remain unverified. Public page reads retain real outgoing links, and Koinos ecosystem research keeps its blockchain context.
-- Includes 0.4.30 response recovery and voice interruption fixes. Physical-phone audio still requires validation.
-- Gateway transport and activation instructions: [credits PR #107](https://github.com/therexdev/kai/pull/107). Native calling is not active on production merely by installing this APK. Automatic context management also works with the existing JSON protocol. See [context design](docs/AGENT-CONTEXT.md) and [validation](qa/0.4.32/VALIDATION.md).
+**[Download the 0.5.0 test APK](https://github.com/therexdev/kai-android-agent/releases/download/v0.5.0-alpha.1/KAI-Android-0.5.0.apk)**
+
+- Chat, voice, saved tasks and routines use a shared execution controller with an encrypted run journal.
+- Research findings and drafts survive model failures and restart. Continue and Answer from findings preserve useful work.
+- Exact action approvals, durable submission receipts, uncertain-write reconciliation and returned document links stay on the phone.
+- Model failures have typed recovery; optional ordered fallbacks preserve the selected account and free/paid policy.
+- Adds user-owned remote MCP connections, bounded workflow templates with per-node models and at most two review rounds, and cited file retrieval with coverage reporting.
+- Includes automatic context management, connected paid credits, the model dropdown and the earlier voice interruption changes.
+
+This is the first test release of the architecture refactor. The [64-item implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md) identifies implemented, partial, gated and future capabilities. Physical-phone audio and live connected-service acceptance require testing. Native tool calling also requires a separately deployed and qualified gateway route; installing this APK does not activate it.
+
+Follow the [test guide](docs/architecture/ALPHA_TEST_GUIDE.md). The encrypted database upgrade preserves existing data and pending approvals; older APKs cannot open the new database schema. Keep an export before updating if you need a deliberate downgrade.
 
 ## Account features
 
@@ -49,7 +55,7 @@ The phone owns conversation history, memory, task records, files, and permission
 5. Approve the phone's displayed code, return to kai, and refresh the account if needed.
 6. GPT OSS 120B is selected by default unless you already saved another model. Use the dropdown to change it.
 
-The package remains `com.kai.agent.preview` for update continuity. This release is version code **39**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
+The package remains `com.kai.agent.preview` for update continuity. This release is version code **40**. APK signing continues the installed alpha identity; it is an early-access distribution, not a Play Store release.
 
 ## Credits and connections
 

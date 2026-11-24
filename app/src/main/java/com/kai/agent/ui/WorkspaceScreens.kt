@@ -52,6 +52,7 @@ internal fun CompanionConversation(state: KaiUiState, actions: KaiUiActions, cha
                     if(reply.isNotBlank()) SelectionContainer { MarkdownReply(reply,textAlign=TextAlign.Center) }
                     else Text("Think out loud, ask for help, or tell me what to do. Your conversation is also available in Chat.",style=MaterialTheme.typography.bodyLarge,textAlign=TextAlign.Center,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(14.dp))
+                    ExecutionPanel(state,actions)
                     if(state.pendingApproval!=null) ApprovalCard(state.pendingApproval,actions,autoOpen=true)
                     if(state.temporaryConversation) Text("Temporary conversation · no saved transcript",style=MaterialTheme.typography.labelMedium)
                 }
@@ -123,6 +124,11 @@ internal fun WorkScreen(state: KaiUiState, actions: KaiUiActions, onChat: ()->Un
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(22.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
         item { Text("Things in motion",style=MaterialTheme.typography.headlineMedium);Text("Saved steps, progress, and routines.",color=MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) { Button(onClick={adding=true},modifier=Modifier.weight(1f)) { Text("New task") };OutlinedButton(onClick={newRoutine=true},modifier=Modifier.weight(1f)) { Text("New routine") } } }
+        item { TemplatesPanel(state,actions) }
+        items(state.executions.filter { it.origin==com.kai.agent.runtime.RunOrigin.CHAT && !it.temporary && it.state !in setOf(com.kai.agent.runtime.ExecutionState.COMPLETED,com.kai.agent.runtime.ExecutionState.CANCELLED) }.sortedByDescending { it.updatedAt },key={"execution-"+it.id}) { execution ->
+            Column { Text(execution.goal.request.take(100),style=MaterialTheme.typography.titleSmall);ExecutionPanel(state,actions,execution)
+                TextButton(onClick={actions.selectConversation(execution.conversationId);onChat()}) { Text("Open chat") } }
+        }
         if(state.pendingApproval!=null && state.pendingApproval.runId.isBlank())item { ApprovalCard(state.pendingApproval,actions) }
         if(state.runs.isEmpty()) item { Text("Give KAI a goal. It will save a plan, work through each step, and ask before outgoing actions.") }
         items(state.runs,key={it.id}) { run ->
@@ -235,6 +241,8 @@ internal fun ProjectsScreen(state: KaiUiState, actions: KaiUiActions, onChat: ()
 }
 
 @Composable private fun ActionReceiptCard(task: KaiTask, actions: KaiUiActions, allowCancel: Boolean) {
+    var reconciling by remember(task.id) { mutableStateOf(false) }
+    var checked by remember(task.id) { mutableStateOf(false) }
     val uriHandler=androidx.compose.ui.platform.LocalUriHandler.current
     val safeUrl=task.resultUrl.takeIf { url -> runCatching { val uri=android.net.Uri.parse(url);uri.scheme=="https" && !uri.host.isNullOrBlank() }.getOrDefault(false) }
     SoftCard {
@@ -243,8 +251,16 @@ internal fun ProjectsScreen(state: KaiUiState, actions: KaiUiActions, onChat: ()
         Text(task.detail,style=MaterialTheme.typography.bodySmall)
         if(task.status==KaiTaskStatus.ACCEPTED)Text("Request accepted. Completion has not been confirmed.",style=MaterialTheme.typography.bodySmall)
         if(task.status==KaiTaskStatus.UNKNOWN)Text("Check the connected service before taking another action. Automatic replay is disabled.",style=MaterialTheme.typography.bodySmall)
+        if(task.status==KaiTaskStatus.UNKNOWN) TextButton(onClick={reconciling=true}) { Text("Record checked outcome") }
         if(task.receiptId.isNotBlank())SelectionContainer { Text("Receipt: ${task.receiptId}",style=MaterialTheme.typography.bodySmall) }
         if(safeUrl!=null)TextButton(onClick={runCatching { uriHandler.openUri(safeUrl) }}) { Text("Open result") }
         if(allowCancel && task.status in setOf(KaiTaskStatus.QUEUED,KaiTaskStatus.WAITING,KaiTaskStatus.NEEDS_APPROVAL))TextButton(onClick={actions.cancelTask(task.id)}) { Text("Cancel task") }
     }
+    if(reconciling) AlertDialog(onDismissRequest={reconciling=false},title={Text("Check ${task.title}")},text={Column {
+        Text("Check this exact action in the connected service. KAI will record your confirmation without submitting or retrying anything.")
+        Row { Checkbox(checked=checked,onCheckedChange={checked=it});Text("I checked the connected service") }
+    }},confirmButton={TextButton(onClick={actions.confirmTaskOutcome(task.id,true);reconciling=false},enabled=checked) { Text("It occurred") }},dismissButton={Row {
+        TextButton(onClick={actions.confirmTaskOutcome(task.id,false);reconciling=false},enabled=checked) { Text("It did not occur") }
+        TextButton(onClick={reconciling=false}) { Text("Keep uncertain") }
+    }})
 }

@@ -221,6 +221,7 @@ internal fun TalkScreen(state: KaiUiState, actions: KaiUiActions, character: Kai
                 if(state.isBusy && state.streamingText.isBlank()) item {Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {if(!state.reducedMotion) CircularProgressIndicator(Modifier.size(14.dp),strokeWidth=1.5.dp) else KaiIcon(KaiGlyph.MORE,Modifier.size(16.dp));Text(characterStatus(state,activity),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}}
                 if(state.partialTranscript.isNotBlank()) item {Text(state.partialTranscript,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.primary)}
                 if(!state.temporaryConversation) items(state.pendingMemories,key={"memory-suggestion-${it.id}"}) {suggestion -> MemorySuggestionCard(suggestion,actions)}
+                item {ExecutionPanel(state,actions)}
                 item {Spacer(Modifier.height(1.dp))}
             }
         }

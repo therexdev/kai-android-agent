@@ -12,7 +12,7 @@ object TaskRules {
         val schema = canonical(JSONObject(intent.toolSchemaJson))
         return MemoryRules.digest(listOf(intent.id, intent.toolName, intent.accountId,
             intent.ownerId, intent.connectionGeneration, intent.toolVersion, schema, arguments,
-            intent.idempotencyKey).joinToString("\u0000"))
+            intent.idempotencyKey).let { if(intent.transportId=="composio" && !intent.readOnly && intent.executionId.isBlank() && intent.effectKind.isBlank()) it else it+listOf(intent.transportId,intent.readOnly.toString(),intent.executionId,intent.effectKind) }.joinToString("\u0000"))
     }
 
     private fun canonical(value: Any?): String = when (value) {
@@ -35,6 +35,12 @@ object TaskRules {
     }
 
     fun validateBinding(intent: ActionIntent, settings: AppSettings) {
+        if(intent.transportId.startsWith("mcp:")) {
+            val server=settings.mcpServers.firstOrNull { it.enabled && "mcp:${it.id}"==intent.transportId } ?: error("MCP connection is disabled or removed.")
+            require(intent.ownerId==settings.composioUserId && intent.accountId==server.accountId && intent.connectionGeneration==server.generation) { "MCP identity or credentials changed; review a new action." }
+            return
+        }
+        require(intent.transportId=="composio") { "Unsupported action transport." }
         require(intent.ownerId.isNotBlank() && intent.ownerId == settings.composioUserId) { "The Composio user identity changed. Prepare this action again." }
         require(intent.connectionGeneration.isNotBlank() && intent.connectionGeneration == settings.connectionGeneration) {
             "The connection generation changed or has not been refreshed. Prepare this action again."
@@ -45,9 +51,7 @@ object TaskRules {
     fun invalidatePendingBinding(task: AgentTask, settings: AppSettings, at: Long = now()): AgentTask {
         val intent = task.intent ?: return task
         if (task.status !in setOf(TaskStatus.READY, TaskStatus.AWAITING_APPROVAL)) return task
-        val valid = settings.composioApiKey.isNotBlank() && intent.ownerId.isNotBlank() &&
-            intent.ownerId == settings.composioUserId && intent.connectionGeneration.isNotBlank() &&
-            intent.connectionGeneration == settings.connectionGeneration
+        val valid = runCatching { validateBinding(intent,settings) }.isSuccess
         if (valid) return task
         return task.copy(status = TaskStatus.DRAFT, approvedFingerprint = "", approvedAt = null,
             updatedAt = at, events = task.events + TaskEvent(status = TaskStatus.DRAFT,

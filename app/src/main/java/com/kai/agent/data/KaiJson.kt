@@ -13,14 +13,21 @@ object KaiJson {
         .put("memories", array(state.memories.map(::memory)))
         .put("memoryTombstones", array(state.memoryTombstones.map(::tombstone)))
         .put("tasks", array(state.tasks.map(::task)))
+        .put("templates",JSONArray(state.templates))
+        .put("executions",array(state.executions.filterNot { it.temporary }.map(com.kai.agent.runtime.RunJson::write)))
         .put("memoryGraph", MemoryGraphJson.encode(state.memoryGraph)), state).toString()
 
     fun decode(json: String): KaiState {
         require(json.length <= 32 * 1024 * 1024) { "KAI data exceeds the supported size." }
-        val root = JSONObject(json)
+        return decodeObject(JSONObject(json))
+    }
+
+    internal fun decodeObject(root: JSONObject): KaiState {
         require(root.getInt("schemaVersion") == 1) { "Unsupported KAI data version. Update the app before opening this data." }
         val base = KaiState(revision = root.optLong("revision"),
+            executions=root.optJSONArray("executions")?.let { a -> (0 until a.length()).map { com.kai.agent.runtime.RunJson.read(a.getJSONObject(it)) } }.orEmpty(),
             settings = readSettings(root.getJSONObject("settings")),
+            templates=root.optJSONArray("templates")?.let { a -> (0 until a.length()).map(a::getString) }.orEmpty(),
             characters = objects(root, "characters").map(::readCharacter),
             conversations = objects(root, "conversations").map(::readConversation),
             memories = objects(root, "memories").map(::readMemory),
@@ -42,6 +49,7 @@ object KaiJson {
         .put("endpoint", p.endpoint).put("model", p.model).put("apiKey", if (secrets) p.apiKey else "")
     private fun readProfile(o: JSONObject) = ProviderProfile(o.optString("endpoint"), o.optString("apiKey"), o.optString("model"))
     private fun settings(s: AppSettings, secrets: Boolean) = JSONObject()
+        .put("mcpServers",JSONArray(if(secrets) s.mcpServers.map { it.json(true) } else emptyList<JSONObject>()))
         .put("creditAccount",s.creditAccount.json(secrets))
         .put("selectedProvider", s.selectedProvider.name).put("koinos", profile(s.koinos, secrets))
         .put("openai", profile(s.openai, secrets)).put("routing", s.routing.name)
@@ -62,6 +70,7 @@ object KaiJson {
         .put("composioUserId", if (secrets) s.composioUserId else "")
         .put("memoryMode", s.memoryMode.name).put("useMemory", s.useMemory)
     private fun readSettings(o: JSONObject) = AppSettings(
+        mcpServers=o.optJSONArray("mcpServers")?.let { a -> (0 until a.length()).map { com.kai.agent.connections.mcp.McpServer.read(a.getJSONObject(it)) } }.orEmpty(),
         creditAccount = com.kai.agent.account.CreditAccount.read(o.optJSONObject("creditAccount")),
         selectedProvider = enumValueOf(o.getString("selectedProvider")),
         koinos = readProfile(o.getJSONObject("koinos")), openai = readProfile(o.getJSONObject("openai")),
@@ -123,10 +132,10 @@ object KaiJson {
     private fun intent(i: ActionIntent) = JSONObject().put("id", i.id).put("toolName", i.toolName)
         .put("accountId", i.accountId).put("argumentsJson", i.argumentsJson).put("connectionGeneration", i.connectionGeneration)
         .put("idempotencyKey", i.idempotencyKey).put("createdAt", i.createdAt)
-        .put("ownerId", i.ownerId).put("toolVersion", i.toolVersion).put("toolSchemaJson", i.toolSchemaJson)
+        .put("effectKind",i.effectKind).put("executionId",i.executionId).put("readOnly",i.readOnly).put("transportId",i.transportId).put("ownerId", i.ownerId).put("toolVersion", i.toolVersion).put("toolSchemaJson", i.toolSchemaJson)
     private fun readIntent(o: JSONObject) = ActionIntent(o.getString("id"), o.getString("toolName"), o.getString("accountId"),
         o.getString("argumentsJson"), o.getString("connectionGeneration"), o.getString("idempotencyKey"), o.getLong("createdAt"),
-        o.optString("ownerId"), o.optString("toolVersion"), o.optString("toolSchemaJson", "{}"))
+        o.optString("ownerId"), o.optString("toolVersion"), o.optString("toolSchemaJson", "{}"),o.optString("transportId","composio"),o.optBoolean("readOnly",false),o.optString("executionId"),o.optString("effectKind"))
     private fun receipt(r: ActionReceipt) = JSONObject().put("operationId", r.operationId).put("providerId", r.providerId)
         .put("status", r.status).put("summary", r.summary).put("url", r.url).put("observedAt", r.observedAt)
     private fun readReceipt(o: JSONObject) = ActionReceipt(o.getString("operationId"), o.optString("providerId"),

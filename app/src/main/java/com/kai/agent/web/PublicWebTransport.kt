@@ -12,7 +12,7 @@ import kotlinx.coroutines.withTimeout
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-class WebResearchException(message: String) : Exception(message)
+class WebResearchException(message: String, val code: String = "UNAVAILABLE") : Exception(message)
 data class WebDocument(val url: String, val body: String, val contentType: String)
 fun interface WebTransport { suspend fun get(url: String, headers: Map<String, String>): WebDocument }
 
@@ -48,7 +48,7 @@ class PublicWebTransport : WebTransport {
                     401, 403 -> "The web service denied access. Check the search key, or use the default search."
                     429 -> "The web service is temporarily rate-limited. Try again later."
                     else -> "The web service could not return this page (HTTP ${response.status})."
-                })
+                }, code="HTTP_${response.status}")
                 return@withTimeout WebDocument(target.toString(), response.body, response.type)
             }
         }
@@ -60,7 +60,7 @@ class PublicWebTransport : WebTransport {
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                if (continuation.isActive) continuation.resumeWithException(WebResearchException("Could not reach the public web service. Check your internet connection."))
+                if (continuation.isActive) continuation.resumeWithException(WebResearchException("Could not reach the public web service.",when(e) { is java.net.SocketTimeoutException -> "TIMEOUT"; is UnknownHostException -> "DNS"; is javax.net.ssl.SSLException -> "TLS"; else -> "NETWORK" }))
             }
             override fun onResponse(call: Call, response: Response) {
                 response.use {
@@ -77,7 +77,7 @@ class PublicWebTransport : WebTransport {
                         } else ""
                         if (continuation.isActive) continuation.resume(Read(response.code, response.header("Location").orEmpty(), type, text))
                     } catch (_: Exception) {
-                        if (continuation.isActive) continuation.resumeWithException(WebResearchException("This page is too large or is not readable web text."))
+                        if (continuation.isActive) continuation.resumeWithException(WebResearchException("This page is too large or is not readable web text.","UNSUPPORTED_CONTENT"))
                     }
                 }
             }

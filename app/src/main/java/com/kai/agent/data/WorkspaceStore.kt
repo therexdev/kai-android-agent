@@ -40,7 +40,11 @@ suspend fun KaiStore.setRunStatus(id: String, status: RunStatus): AgentRun = cha
         if (task.runId == id && task.submittedAt == null && task.status in setOf(TaskStatus.DRAFT,TaskStatus.READY,TaskStatus.AWAITING_APPROVAL))
             TaskRules.transition(task,TaskStatus.CANCELLED,state.settings,"Parent task cancelled") else task
     }
-    withRun(state.copy(tasks=tasks),next) to next
+    val executions=state.executions.map { r ->
+        if(r.sourceId!=id || status==RunStatus.QUEUED) r else r.copy(state=if(status==RunStatus.CANCELLED) com.kai.agent.runtime.ExecutionState.CANCELLED else com.kai.agent.runtime.ExecutionState.PAUSED,
+            owner="",detail=next.detail,revision=r.revision+1)
+    }
+    withRun(state.copy(tasks=tasks,executions=executions),next) to next
 }
 suspend fun KaiStore.skipRunStep(id: String): AgentRun = change { state ->
     val run = state.runs.first { it.id == id }
@@ -218,4 +222,25 @@ suspend fun KaiStore.saveActionCheckpoint(id: String, checkpoint: String, expect
     TaskRules.validateBinding(requireNotNull(task.intent),state.settings)
     val next=task.copy(resultContext=org.json.JSONObject().put("checkpoint",org.json.JSONArray(checkpoint)).toString(),contextArchive=archive)
     state.copy(tasks=state.tasks.map { if(it.id==id) next else it }) to next
+}
+
+/** Definition, model choices, review bounds and run admission are one durable transaction. */
+suspend fun KaiStore.createTemplateRun(template: com.kai.agent.extensions.WorkflowTemplate, input: String, projectId: String, characterId: String): AgentRun = change { state ->
+    val (next,created)=makeRun(state,template.name,template.goal.replace("{{input}}",input),projectId,characterId,emptyList())
+    val run=created.copy(steps=template.steps(input))
+    RunRules.validate(run)
+    next.copy(runs=next.runs.map { if(it.id==run.id) run else it }) to run
+}
+
+/** Called only by an explicit user continuation, never by a worker retry or approval callback. */
+suspend fun KaiStore.authorizeRunContinuation(id: String) = change { state ->
+    val run=state.runs.first { it.id==id }
+    require(run.status !in setOf(RunStatus.RUNNING,RunStatus.QUEUED)) { "Pause this task before changing its allowance." }
+    val executions=state.executions.map { r ->
+        if(r.sourceId!=id || !r.budget.exhausted) r else {
+            require(r.owner.isBlank()) { "The previous owner is still settling." }
+            r.copy(budget=r.budget.copy(maxModelSteps=r.budget.modelSteps+192,maxOutputTokens=r.budget.outputTokens+524288),revision=r.revision+1)
+        }
+    }
+    state.copy(executions=executions) to Unit
 }

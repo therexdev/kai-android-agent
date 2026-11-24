@@ -101,7 +101,7 @@ class WebResearchTest {
         val c=client { url,_ -> calls++;WebDocument(url,html,"text/html") }
         val session=WebResearchSession("Search the web for facts",c)
         val denied=session.execute(AgentDecision.ReadWebPage("https://unrequested.example/"))
-        assertTrue(denied.contains("unavailable"));assertEquals(0,calls)
+        assertTrue(denied.contains("URL_POLICY"));assertEquals(0,calls)
         val receipt=session.execute(AgentDecision.WebSearch("facts"))
         val resumed=WebResearchSession("Search the web for facts",c,prior=listOf(InferenceMessage("assistant","{\"type\":\"web_search\",\"query\":\"facts\"}"),InferenceMessage("user",receipt)))
         assertFalse(resumed.awaitingSearch);assertTrue(resumed.hasEvidence)
@@ -132,7 +132,7 @@ class WebResearchTest {
     @Test fun searchAttemptsAreBoundedEvenAfterFailures() = runBlocking {
         var calls=0
         val session=WebResearchSession("Search online",client { _,_ -> calls++;throw WebResearchException("offline") })
-        repeat(6){session.execute(AgentDecision.WebSearch("facts"))};assertEquals(6,calls)
+        repeat(6){session.execute(AgentDecision.WebSearch("facts"))};assertEquals(2,calls) // One search action; two configured search-provider attempts.
     }
 
     @Test fun ecosystemLinksRemainNavigableWithoutPretendingTheirPagesWereRead() = runBlocking {

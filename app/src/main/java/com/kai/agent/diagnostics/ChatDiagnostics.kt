@@ -12,7 +12,7 @@ import java.net.URI
 /** Only sanitized, bounded values may cross the durable diagnostics boundary. */
 class DiagnosticRedactor(settings: AppSettings) {
     private val secrets = listOf(settings.koinos.apiKey, settings.openai.apiKey, settings.composioApiKey,
-        settings.braveSearchApiKey, settings.connectionsSessionToken, settings.creditAccount.token, settings.creditAccount.linkSecret).filter { it.isNotBlank() }.distinct().sortedByDescending { it.length }
+        settings.braveSearchApiKey, settings.connectionsSessionToken, settings.creditAccount.token, settings.creditAccount.linkSecret).plus(settings.mcpServers.flatMap { server -> listOf(server.token,server.endpoint)+runCatching { java.net.URI(server.endpoint).rawPath }.getOrNull().orEmpty().split('/').filter { it.length>=24 } }).filter { it.isNotBlank() }.distinct().sortedByDescending { it.length }
     private val routes = listOf(settings.koinos.endpoint, settings.openai.endpoint, settings.connectionsBaseUrl)
         .mapNotNull { runCatching { URI(it).rawPath }.getOrNull() }.filter { it.contains("/r/") }
     private fun sensitive(key: String): Boolean = key.lowercase().replace(Regex("[^a-z0-9]"), "") in setOf(
@@ -87,6 +87,7 @@ class ChatTrace internal constructor(
     }
     suspend fun error(kind: String, error: Throwable) = record(kind, JSONObject()
         .put("class", error.javaClass.simpleName).put("message", error.message.orEmpty())
+        .put("failureCode",(error as? com.kai.agent.inference.InferenceException)?.failureCode?.name ?: JSONObject.NULL)
         .put("httpStatus", (error as? com.kai.agent.inference.InferenceException)?.httpStatus ?: (error as? com.kai.agent.connections.ConnectionServiceException)?.statusCode ?: JSONObject.NULL))
 }
 

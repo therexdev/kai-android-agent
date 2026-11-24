@@ -113,6 +113,8 @@ data class KaiUiState(
     val hapticsEnabled: Boolean = false,
     val providerConfig: KaiProviderConfig = KaiProviderConfig(),
     val account: com.kai.agent.account.AccountUi = com.kai.agent.account.AccountUi(),
+    val preferredOutput: Int = 4096,
+    val fallbackModels: List<String> = emptyList(),
     val providerStatus: String = "Choose your AI to get started",
     val providerConnected: Boolean = false,
     val availableModels: List<String> = emptyList(),
@@ -140,6 +142,9 @@ data class KaiUiState(
     val error: String? = null,
     val isDarkTheme: Boolean = true,
     val runs: List<AgentRun> = emptyList(),
+    val executions: List<com.kai.agent.runtime.ExecutionRun> = emptyList(),
+    val templates: List<String> = emptyList(),
+    val mcpServers: List<com.kai.agent.connections.mcp.McpServer> = emptyList(),
     val routines: List<AgentRoutine> = emptyList(),
     val projects: List<KaiProject> = emptyList(),
     val documents: List<ProjectDocument> = emptyList(),
@@ -159,6 +164,8 @@ interface KaiUiActions {
     fun accountCancelSignIn() {}
     fun accountRefresh() {}
     fun accountSignOut() {}
+    fun setAgentOutput(tokens: Int) {}
+    fun setFallbackModels(ids: List<String>) {}
     fun accountSelectModel(id: String) {}
     fun accountSelectWallet(address: String) {}
     fun accountFreeOnly(enabled: Boolean) {}
@@ -206,6 +213,7 @@ interface KaiUiActions {
     fun signOutConnections()
     fun approveAction(id: String)
     fun denyAction(id: String)
+    fun confirmTaskOutcome(id: String, happened: Boolean) {}
     fun cancelTask(id: String)
     fun clearError()
     fun setDarkTheme(enabled: Boolean)
@@ -219,6 +227,17 @@ interface KaiUiActions {
     fun createRun(title: String, goal: String, steps: List<String>) {}
     fun pauseRun(id: String) {}
     fun resumeRun(id: String) {}
+    fun saveMcpServer(id: String, name: String, endpoint: String, token: String, protocol: String) {}
+    fun toggleMcpServer(id: String, enabled: Boolean) {}
+    fun removeMcpServer(id: String) {}
+    fun checkMcpServer(id: String) {}
+    fun saveTemplate(json: String) {}
+    fun removeTemplate(id: String) {}
+    fun exportTemplate(id: String) {}
+    fun runTemplate(id: String, input: String) {}
+    fun continueExecution(id: String, answerOnly: Boolean = false) {}
+    fun stopSpeakingOnly() {}
+    fun pauseExecution(id: String) {}
     fun cancelRun(id: String) {}
     fun directRun(id: String, text: String) {}
     fun skipRunStep(id: String) {}

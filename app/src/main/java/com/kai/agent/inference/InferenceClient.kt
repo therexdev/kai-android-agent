@@ -427,6 +427,15 @@ class InferenceClient(client: OkHttpClient? = null,
     }
 
     private fun responseError(response: Response, config: ProviderConfig? = null): InferenceException {
+        val error=responseErrorWithoutTiming(response,config)
+        val timing=response.header("Retry-After")?.let { value ->
+            value.toLongOrNull()?.takeIf { it>=0 }?.coerceAtMost(86400)?.times(1000) ?: runCatching {
+                (java.time.ZonedDateTime.parse(value,java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()-System.currentTimeMillis()).coerceIn(0,86400000)
+            }.getOrNull()
+        }
+        return InferenceException(error.message.orEmpty(),error.httpStatus,error.contextOverflow,error.failureCode,timing)
+    }
+    private fun responseErrorWithoutTiming(response: Response, config: ProviderConfig? = null): InferenceException {
         if(config?.accountSession == true) {
             val accountMessage = when(response.code) {
                 401 -> "Your sign-in expired. Open Account and sign in again."
@@ -450,6 +459,16 @@ class InferenceClient(client: OkHttpClient? = null,
     }
     /** Classify only. Never echo provider text, which may contain credentials or the prompt. */
     private fun classifiedError(body: String, status: Int?): InferenceException {
+        val error=runCatching { JSONObject(body).let { it.optJSONObject("error") ?: it } }.getOrNull()
+        val code=error?.optString("code").orEmpty()
+        val diagnostics=error?.optJSONObject("diagnostics")
+        if(code in setOf("managed_reasoning_only", "managed_output_exhausted") ||
+            code=="managed_empty_output" && diagnostics?.optString("finishReason")=="length") {
+            val reasoning=code=="managed_reasoning_only" || (diagnostics?.optInt("reasoningChars") ?: 0)>0
+            return InferenceException(if(reasoning) "The model used its response allowance on reasoning without producing an answer. Progress is saved; use a larger supported output budget or another model."
+                else "The model reached its output limit without an answer. Progress is saved.",status,
+                failureCode=if(reasoning) com.kai.agent.runtime.FailureCode.REASONING_ONLY else com.kai.agent.runtime.FailureCode.OUTPUT_EXHAUSTED)
+        }
         val overflow=InferenceRejection.isContextOverflow(body) || status==413
         val message = InferenceRejection.describe(body, status) ?: if(overflow) "The inference request exceeds the model or gateway context limit." else return statusError(status ?: 400)
         return InferenceException(message,status,contextOverflow=overflow)
@@ -471,7 +490,8 @@ class InferenceClient(client: OkHttpClient? = null,
 
     private fun networkError(e: IOException) = InferenceException(
         if (e is java.net.SocketTimeoutException) "The AI connection timed out. Check the endpoint and connection."
-        else "Could not reach the AI provider securely. Check connectivity and the API endpoint."
+        else "Could not reach the AI provider securely. Check connectivity and the API endpoint.",
+        failureCode=if(e is java.net.SocketTimeoutException) com.kai.agent.runtime.FailureCode.TIMEOUT else com.kai.agent.runtime.FailureCode.NETWORK
     )
     private fun sanitize(e: Exception): Exception = when (e) {
         is InferenceException, is CancellationException -> e

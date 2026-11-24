@@ -46,7 +46,9 @@ class AgentHarness(val native: Boolean) {
                 if (completion.finishReason !in setOf("stop","eos")) throw AgentResponseException("The native reply did not finish.")
                 if (completion.text.isBlank() || Regex("\"type\"\\s*:\\s*\"(?:action|find_tools|inspect_tool|web_search|read_web_page)\"").containsMatchIn(completion.text))
                     throw AgentResponseException("Use the registered native functions for actions.")
-                AgentDecision.Reply(completion.text)
+                AgentProtocol.rejectControl(completion.text)
+                val kind=runCatching { JSONObject(completion.text).optString("type") }.getOrDefault("")
+                if(kind in setOf("reply","needs_input","partial","blocked")) AgentProtocol.parse(completion.text) else AgentDecision.Reply(completion.text)
             } else {
                 if (completion.toolCalls.size != 1 || completion.finishReason != "tool_calls") throw AgentResponseException("Choose one complete tool call at a time.")
                 val call = completion.toolCalls.single()
@@ -115,6 +117,8 @@ class AgentHarness(val native: Boolean) {
             fun tool(name: String,description: String,vararg fields: String) = InferenceTool(name,description,JSONObject().put("type","object")
                 .put("properties",JSONObject().apply { fields.forEach { put(it,JSONObject().put("type","string")) } }).put("required",JSONArray(fields.toList())).put("additionalProperties",false).toString())
             return listOf(InferenceTool("read_context","Read earlier phone-owned task data. entryId=index lists tool results; t_N retrieves a tool result and h_N retrieves history. Follow nextOffset to read more.","""{"type":"object","properties":{"entryId":{"type":"string"},"offset":{"type":"integer","minimum":0,"maximum":2000000}},"required":["entryId"],"additionalProperties":false}"""),tool("web_search","Search the public web with topical keywords.","query"),tool("read_web_page","Read a public URL from search results, page links or the user.","url"),
+                tool("search_files","Search permitted project/conversation files. Results are partial excerpts, not full-file coverage.","query"),
+                InferenceTool("read_file","Read a permitted file revision by offset. Follow nextOffset for exhaustive review.","""{"type":"object","properties":{"fileId":{"type":"string"},"offset":{"type":"integer","minimum":0,"maximum":200000}},"required":["fileId"],"additionalProperties":false}"""),
                 tool("find_tools","Discover exact actions and schemas on a connected account.","accountId","search"),tool("inspect_tool","Inspect a discovered action schema.","accountId","tool"),
                 tool("search_memory","Look up relevant saved memory.","query"),tool("propose_memory","Propose an exact user quotation for memory review.","quote"))
         }

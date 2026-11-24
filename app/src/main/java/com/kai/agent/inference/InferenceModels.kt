@@ -18,6 +18,7 @@ data class ProviderConfig(
     val modelOutputLimit: Int? = null,
     val nativeTools: Boolean = false,
     val tools: List<InferenceTool> = emptyList(),
+    val allowOutputGrowth: Boolean = true,
 ) {
     override fun toString() = "ProviderConfig(provider=$provider, modelId=$modelId, routing=$routing, apiKey=<redacted>)"
 }
@@ -47,4 +48,13 @@ sealed interface StreamEvent {
     data class Finished(val finishReason: String?, val usage: TokenUsage?, val activeContextTokens: Int? = null, val toolCalls: List<ToolCall> = emptyList()) : StreamEvent
 }
 
-class InferenceException(message: String, val httpStatus: Int? = null, val contextOverflow: Boolean = false) : Exception(message)
+class InferenceException(message: String, val httpStatus: Int? = null, val contextOverflow: Boolean = false,
+    val failureCode: com.kai.agent.runtime.FailureCode = when {
+        contextOverflow -> com.kai.agent.runtime.FailureCode.CONTEXT_LIMIT
+        httpStatus in setOf(401,403) -> com.kai.agent.runtime.FailureCode.AUTHENTICATION
+        httpStatus==402 -> com.kai.agent.runtime.FailureCode.CREDITS
+        httpStatus==429 -> com.kai.agent.runtime.FailureCode.RATE_LIMIT
+        httpStatus in setOf(408,504) -> com.kai.agent.runtime.FailureCode.TIMEOUT
+        httpStatus!=null && httpStatus>=500 -> com.kai.agent.runtime.FailureCode.OVERLOAD
+        else -> com.kai.agent.runtime.FailureCode.UNSUPPORTED
+    }, val retryAfterMillis: Long? = null) : Exception(message)

@@ -102,6 +102,7 @@ internal fun ConnectionsScreen(state:KaiUiState,actions:KaiUiActions) {
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
         item {SectionHeader("Your world, connected","Make room for more.","Bring your apps into the conversation, with access you control.")}
         item {ComposioSetupCard(state,actions)}
+        item {McpConnectionsPanel(state,actions)}
         if(state.connectionsSignedIn) item {OutlinedTextField(value=query,onValueChange={query=it;selectedCategory="All";actions.searchConnections(it)},placeholder={Text("Find an app or service")},leadingIcon={KaiIcon(KaiGlyph.SEARCH,tint=MaterialTheme.colorScheme.onSurfaceVariant)},modifier=Modifier.fillMaxWidth(),singleLine=true,shape=RoundedCornerShape(16.dp))}
         if(categories.size>2) item {Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){categories.forEach{category ->FilterChip(selected=category==selectedCategory,onClick={selectedCategory=category},label={Text(category)},shape=RoundedCornerShape(12.dp))}}}
         val filtered=state.connections.filter { (it.name.contains(query,true)||it.description.contains(query,true)) && (selectedCategory=="All" || (selectedCategory=="Connected" && it.status==KaiConnectionStatus.CONNECTED) || it.category==selectedCategory) }

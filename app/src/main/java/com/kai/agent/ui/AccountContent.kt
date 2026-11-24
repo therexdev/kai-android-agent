@@ -93,6 +93,25 @@ internal fun AccountContent(state: KaiUiState, actions: KaiUiActions, onClose: (
                     if(m.available && !m.freeEligible && a.freeOnly) Text("Enable Use purchased credits to use this model.",style=MaterialTheme.typography.bodySmall)
                     Text("Per million tokens: ${m.inputPrice} credits input · ${m.outputPrice} output",style=MaterialTheme.typography.bodySmall)
                 }
+                Text("Response allowance",style=MaterialTheme.typography.titleMedium)
+                Text("Includes reasoning on models that count it as output. Higher limits can cost more; the serving model's limit still applies.",style=MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    listOf(2048,4096,8192).forEach { limit -> FilterChip(selected=state.preferredOutput==limit,onClick={actions.setAgentOutput(limit)},label={Text(limit.toString())}) }
+                }
+                Text("Optional fallback models",style=MaterialTheme.typography.titleMedium)
+                Text("Selected models are tried in the order shown, within the same credit account and free/paid policy. Fallback never repeats an external action. Models with a different tool protocol are skipped.",style=MaterialTheme.typography.bodySmall)
+                state.fallbackModels.forEachIndexed { index,id ->
+                    TextButton(onClick={actions.setFallbackModels(state.fallbackModels-id)}) { Text("${index+1}. ${o.models.firstOrNull { it.id==id }?.label ?: id} · Remove") }
+                }
+                var fallbackOpen by remember { mutableStateOf(false) }
+                Box {
+                    OutlinedButton(onClick={fallbackOpen=true},enabled=state.fallbackModels.size<8) { Text("Add fallback") }
+                    DropdownMenu(expanded=fallbackOpen,onDismissRequest={fallbackOpen=false}) {
+                        o.models.filter { it.id!=a.model && it.id !in state.fallbackModels }.forEach { m ->
+                            DropdownMenuItem(text={Text(m.label)},onClick={fallbackOpen=false;actions.setFallbackModels(state.fallbackModels+m.id)},enabled=m.available && (!a.freeOnly || m.freeEligible))
+                        }
+                    }
+                }
                 if(o.models.none { it.available }) Text("No models are available right now. Refresh to check again.")
             }
             OutlinedButton(onClick=actions::accountRefresh,enabled=!a.busy,modifier=Modifier.fillMaxWidth()) { Text("Refresh balance & models") }

@@ -16,8 +16,8 @@ class AgentResponseRecovery {
     private var outputFloor = 0
 
     fun requestConfig(config: ProviderConfig): ProviderConfig {
-        requestedOutput = maxOf(config.maxOutputTokens, outputFloor)
-            .coerceAtMost(minOf(config.modelOutputLimit ?: 8192, 8192))
+        val ceiling=minOf(config.modelOutputLimit ?: 8192,if(config.allowOutputGrowth) 8192 else config.maxOutputTokens)
+        requestedOutput = maxOf(config.maxOutputTokens, outputFloor).coerceAtMost(ceiling)
         return config.copy(maxOutputTokens = requestedOutput)
     }
 

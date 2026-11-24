@@ -3,12 +3,16 @@ package com.kai.agent.agent
 import org.json.JSONObject
 import org.json.JSONTokener
 
+enum class ReplyOutcome { ANSWER, QUESTION, PARTIAL, BLOCKED }
+
 /** A model may propose an action. Only a completed, validated response reaches this parser. */
 sealed interface AgentDecision {
-    data class Reply(val text: String) : AgentDecision
+    data class Reply(val text: String, val outcome: ReplyOutcome = ReplyOutcome.ANSWER) : AgentDecision
     data class WebSearch(val query: String) : AgentDecision
     data class ReadWebPage(val url: String) : AgentDecision
     data class ReadContext(val entryId: String, val offset: Int = 0) : AgentDecision
+    data class SearchFiles(val query: String) : AgentDecision
+    data class ReadFile(val fileId: String, val offset: Int = 0) : AgentDecision
     data class SearchMemory(val query: String) : AgentDecision
     data class ProposeMemory(val quote: String, val claimsJson: String? = null) : AgentDecision
     data class FindTools(val accountId: String, val search: String) : AgentDecision
@@ -21,6 +25,7 @@ object AgentProtocol {
     const val MAX_ARGUMENTS = 16_000
 
     fun parse(raw: String): AgentDecision {
+        rejectControl(raw)
         require(raw.length <= MAX_RESPONSE) { "The model response was too large. Try a smaller request." }
         var input = raw.trim()
         if (input.startsWith("```")) {
@@ -45,10 +50,15 @@ object AgentProtocol {
             throw AgentResponseException("The model returned invalid or unfinished JSON, or more than one response.")
         }
         return try { when (obj.optString("type")) {
-            "reply" -> AgentDecision.Reply(obj.getString("text").take(MAX_RESPONSE))
+            "reply", "needs_input", "partial", "blocked" -> AgentDecision.Reply(obj.getString("text").take(MAX_RESPONSE),when(obj.optString("type")) {
+                "needs_input" -> ReplyOutcome.QUESTION; "partial" -> ReplyOutcome.PARTIAL; "blocked" -> ReplyOutcome.BLOCKED
+                else -> ReplyOutcome.entries.firstOrNull { it.name.equals(obj.optString("outcome"),true) } ?: ReplyOutcome.ANSWER
+            })
             "web_search" -> AgentDecision.WebSearch(bounded(obj, "query", 300))
             "read_web_page" -> AgentDecision.ReadWebPage(bounded(obj, "url", 2048))
             "read_context" -> AgentDecision.ReadContext(required(obj,"entryId"),obj.optInt("offset",0).also { require(it in 0..2_000_000) })
+            "search_files" -> AgentDecision.SearchFiles(bounded(obj,"query",300))
+            "read_file" -> AgentDecision.ReadFile(required(obj,"fileId"),obj.optInt("offset",0).also { require(it in 0..200000) })
             "search_memory" -> AgentDecision.SearchMemory(bounded(obj, "query", 300))
             "propose_memory" -> AgentDecision.ProposeMemory((obj.opt("quote") as? String)?.trim().orEmpty().also {
                 require(it.length in 3..2000) { "Choose a short exact quotation for memory review." }
@@ -70,6 +80,10 @@ object AgentProtocol {
         }
     }
 
+    fun rejectControl(raw: String) {
+        if(Regex("^\\s*<\\|(?:channel|im_start|start|end|analysis|assistant)[^>]*\\|>").containsMatchIn(raw))
+            throw AgentResponseException("The model returned protocol control markup instead of a final answer.")
+    }
     private fun bounded(obj: JSONObject, name: String, limit: Int): String = (obj.opt(name) as? String)?.trim().orEmpty().also {
         require(it.isNotBlank() && it.length <= limit && it.none { c -> c.code < 32 }) { "The web action has an invalid $name." }
     }

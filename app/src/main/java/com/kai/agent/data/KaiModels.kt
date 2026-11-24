@@ -15,6 +15,8 @@ data class KaiState(
     val tasks: List<AgentTask> = emptyList(),
     val memoryGraph: MemoryGraph = MemoryGraph(),
     val runs: List<AgentRun> = emptyList(),
+    val executions: List<com.kai.agent.runtime.ExecutionRun> = emptyList(),
+    val templates: List<String> = emptyList(),
     val routines: List<AgentRoutine> = emptyList(),
     val projects: List<KaiProject> = emptyList(),
     val documents: List<ProjectDocument> = emptyList(),
@@ -75,6 +77,7 @@ data class AppSettings(
     val playfulVoiceDefaultApplied: Boolean = true,
     val kikiVoiceDefaultApplied: Boolean = true,
     val visionInputEnabled: Boolean = false,
+    val mcpServers: List<com.kai.agent.connections.mcp.McpServer> = emptyList(),
 ) {
     fun activeProfile(): ProviderProfile = when (selectedProvider) {
         Provider.KOINOS -> koinos
@@ -178,6 +181,10 @@ data class ActionIntent(
     val ownerId: String = "",
     val toolVersion: String = "",
     val toolSchemaJson: String = "{}",
+    val transportId: String = "composio",
+    val readOnly: Boolean = false,
+    val executionId: String = "",
+    val effectKind: String = "",
 )
 
 data class ActionReceipt(

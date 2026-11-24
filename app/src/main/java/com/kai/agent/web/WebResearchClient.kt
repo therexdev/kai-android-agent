@@ -57,7 +57,7 @@ class WebResearchClient(private val transport: WebTransport = PublicWebTransport
         doc.select("script,style,noscript,nav,header,footer,form,iframe,svg,template,[hidden],[aria-hidden=true]").remove()
         val text = if(page.contentType.startsWith("text/plain")) page.body else
             (doc.selectFirst("article") ?: doc.selectFirst("main") ?: doc.body()).text()
-        if (text.isBlank()) throw WebResearchException("This page has no readable text. It may require sign-in or JavaScript.")
+        if (text.isBlank()) throw WebResearchException("This page has no readable text. It may require sign-in or JavaScript.","EMPTY_EXTRACTION")
         val limit = if(smallContext) 1500 else 6000
         return JSONObject().put("kind", "page").put("status", "ok").put("url", page.url)
             .put("links",JSONArray(links)).put("requestedUrl", url).put("title", doc.title().take(180)).put("text", text.take(limit))
