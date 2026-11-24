@@ -4,18 +4,17 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.8
+## Test release: 0.5.9
 
-The signed 0.5.8 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.9 test APK is distributed directly. The latest published release remains available above.
 
-- Makes the write contract explicit: a complete action call prepares the phone's review card; only exact approval authorizes execution.
-- Validates unfinished action requests in the shared native/JSON parser, used by chat and saved tasks/routines. Ordinary readiness prose cannot end the turn; specific missing-input questions and explicit partial/blocked results remain available.
-- Uses the existing bounded response correction and preserves its full explanation in native mode. No new retry controller or increased allowance.
-- Retains 0.5.7 source text retrieval, exact action approval, uncertain-write protection and document read-back.
+The newest tool result now stays complete at every context projection level. Older results can still be compacted, but the next decision retains its exact schema/error, source excerpt or receipt. This corrects the latest report's truncated action feedback and source-read response. Existing payload and context limits still apply; an oversized active exchange stops explicitly instead of silently losing its content.
 
-Private replay checks the latest premature-confirmation response and the earlier successful document arguments. Scripted document-only and document-plus-email tests cover compaction and resume. These checks do not establish live model choices or physical Android completion. See [the action review contract](docs/ACTION-REVIEW-CONTRACT.md), [validation](qa/0.5.8/VALIDATION.md) and [implementation status](docs/architecture/IMPLEMENTATION_STATUS.md).
+Action feedback uses the active native/JSON protocol and identifies the discovered body field when required document content is missing. The app does not move generated text out of a title, invent a proposal, increase retries or relax approval. The tests now cover both required-Markdown and optional-text creation tools.
 
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. Physical 0.5.8 validation remains open.
+Private replay and scripted model/service tests do not prove live completion. See [the diagnosis and correction](docs/CURRENT-TOOL-RESULT-CONTRACT.md), [validation](qa/0.5.9/VALIDATION.md) and [phone checks](qa/0.5.9/RELEASE.md).
+
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server update or new provider qualification is required. Physical 0.5.9 validation remains open.
 
 ## Account features
 

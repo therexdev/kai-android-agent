@@ -157,7 +157,7 @@ class TaskAgentEngine(
                 val steps=parsePlan(planned.text)
                 store.editRun(id,token) { it.copy(steps=steps,detail="Plan saved · ${steps.size} steps") }
             }
-            val toolRecovery = AgentToolRecovery()
+            val toolRecovery = AgentToolRecovery { harness.native }
             val documentGuards=mutableMapOf<String,DocumentContentGuard>()
             var contextManager=AgentContextManager()
             var managedRevision: Long?=null
