@@ -16,6 +16,8 @@ class WebResearchSession(
     private val smallContext: Boolean = false,
     prior: List<InferenceMessage> = emptyList(),
     requireFreshResearch: Boolean = true,
+    trustedResults: List<String>? = null,
+    private val onResult: suspend (JSONObject)->String? = { null },
 ) {
     private val researchRequest = instruction
     private val allowed = Regex("https://[^\\s<>\"]+").findAll(instruction).mapNotNull { match ->
@@ -53,7 +55,7 @@ class WebResearchSession(
 
     init {
         nudged = prior.any { it.role == "user" && it.content.startsWith("Phone runtime: this request needs public web research.") }
-        prior.zipWithNext().forEach { (a, r) ->
+        if(trustedResults!=null) trustedResults.forEach { record(JSONObject(it)) } else prior.zipWithNext().forEach { (a, r) ->
             if(a.role == "assistant" && r.role in setOf("user","tool") && r.content.startsWith(PREFIX))
                 runCatching { record(JSONObject(r.content.removePrefix(PREFIX))) }
         }
@@ -95,7 +97,12 @@ class WebResearchSession(
             is AgentDecision.ReadWebPage -> "page:"+validatedUrl
             else -> error("Not a web action")
         }
-        cached[key]?.let { noProgress++; return PREFIX+JSONObject(it.toString()).put("cached",true).put("networkAttempt",false).put("budget",budgetSummary) }
+        cached[key]?.let {
+            noProgress++
+            val result=JSONObject(it.toString()).put("cached",true).put("networkAttempt",false).put("budget",budgetSummary)
+            onResult(result)?.let { result.put("evidence",JSONObject(it)) }
+            return PREFIX+result
+        }
         val result = try {
             when(decision) {
                 is AgentDecision.WebSearch -> {
@@ -134,7 +141,9 @@ class WebResearchSession(
             }
         }
         result.put("requestKey",key).put("networkAttempt",true)
+        if(decision is AgentDecision.ReadWebPage) result.put("requestedUrl",validatedUrl)
         record(result)
+        onResult(result)?.let { result.put("evidence",JSONObject(it)) }
         return PREFIX + result.put("budget",budgetSummary).toString()
     }
     private fun relevant(text: String,url: String): Boolean = url.startsWith("https://koinos.io/") ||
@@ -175,11 +184,14 @@ class WebResearchSession(
     fun withSources(reply: String): String {
         if(searches + reads > 0 && sources.isEmpty()) return "I couldn't retrieve usable web sources for this request. Search may be unavailable or there may be no matching results. Try narrower keywords, give me a public page URL, or set up the optional Brave Search key in Settings."
         if(sources.isEmpty()) return reply
-        val missing = sources.entries.filter { !reply.contains(it.key) }.take(5)
-        if(missing.isEmpty()) return reply
-        // URLs are real retrieval receipts, never invented by the model. Titles are not markup.
-        return reply + "\n\nSources retrieved:\n" + missing.joinToString("\n") { "- <${it.key}>" }
+        val pages=cached.values.filter { it.optString("kind")=="page" && it.optString("status")=="ok" }
+            .map { it.getString("url") }.toSet()
+        val read=sources.keys.filter { it in pages }.take(5)
+        val snippets=sources.keys.filter { it !in pages }.take(5)
+        return reply+(if(read.isEmpty()) "" else "\n\nPage excerpts read:\n"+read.joinToString("\n") { "- <$it>" })+
+            (if(snippets.isEmpty()) "" else "\n\nSearch-result excerpts (pages not read):\n"+snippets.joinToString("\n") { "- <$it>" })
     }
+
     private fun policyResult(kind: String, code: String, message: String): String {
         noProgress++
         return PREFIX+JSONObject().put("kind",kind).put("status","blocked").put("code",code).put("networkAttempt",false).put("message",message).put("budget",budgetSummary)

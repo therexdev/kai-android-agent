@@ -497,6 +497,7 @@ class KaiStore(context: Context) {
                     .put("failureCode",r.failure?.name ?: JSONObject.NULL).put("modelSteps",r.budget.modelSteps)
                     .put("inputTokens",r.budget.inputTokens).put("outputTokens",r.budget.outputTokens).put("artifactCount",r.artifacts.size)
                     .put("inferenceAllowance",com.kai.agent.runtime.InferenceLedgerJson.write(r.budget.inference))
+                    .put("researchEvidence",com.kai.agent.web.ResearchEvidenceJson.write(r.research))
                     .put("events",org.json.JSONArray(r.events.map { e -> JSONObject().put("sequence",e.sequence).put("at",e.at).put("kind",e.kind).put("code",e.code) }))
             }))
             .put("trace",trace.getJSONArray("events"))

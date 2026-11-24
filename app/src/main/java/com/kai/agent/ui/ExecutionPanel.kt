@@ -10,7 +10,7 @@ import com.kai.agent.runtime.*
 @Composable
 internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: ExecutionRun? = null) {
     val run=selected ?: state.executions.lastOrNull { it.conversationId==state.currentConversationId && it.origin==RunOrigin.CHAT } ?: return
-    if(run.state in setOf(ExecutionState.COMPLETED,ExecutionState.CANCELLED)) {
+    if(run.state==ExecutionState.CANCELLED || run.state==ExecutionState.COMPLETED && run.research.receipts.isEmpty()) {
         if(state.speechAudible && run.conversationId==state.currentConversationId)
             TextButton(onClick=actions::stopSpeakingOnly) { Text("Stop speaking") }
         return
@@ -25,6 +25,7 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
                 ExecutionState.RECONCILING -> "Action outcome needs checking"
                 ExecutionState.PARTIAL -> "Progress saved · work remains"
                 ExecutionState.FAILED -> "Stopped · progress saved"
+                ExecutionState.COMPLETED -> "Research saved · review sources"
                 else -> "Paused · progress saved"
             },style=MaterialTheme.typography.titleSmall)
             if(run.detail.isNotBlank()) Text(run.detail,style=MaterialTheme.typography.bodySmall)
@@ -52,8 +53,17 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
                     if(allowance.unpriced>0) " · ${allowance.unpriced} requests without a price" else " · not settled billing",style=MaterialTheme.typography.bodySmall)
                 if(allowance.unreported>0) Text("Usage was not returned for ${allowance.unreported} requests; their token and cost allowances are retained.",style=MaterialTheme.typography.bodySmall)
                 if(allowance.legacy) Text("Calls made before 0.5.4 were not fully measured.",style=MaterialTheme.typography.bodySmall)
+                if(run.research.receipts.isNotEmpty() || run.research.legacy) {
+                    Text(run.research.reviewSummary(),style=MaterialTheme.typography.bodySmall)
+                    run.research.findings.takeLast(4).forEach { finding ->
+                        val source=run.research.sources.first { it.id==finding.sourceId }
+                        Text(finding.claim,style=MaterialTheme.typography.bodySmall)
+                        Text("Source quotation: ${finding.quote}",style=MaterialTheme.typography.bodySmall)
+                        Text("${if(source.kind==com.kai.agent.web.SourceKind.SEARCH_SNIPPET) "Search excerpt" else "Page excerpt"}: ${source.url}",style=MaterialTheme.typography.bodySmall)
+                    }
+                }
                 run.artifacts.lastOrNull()?.let { artifact ->
-                    Text("Saved draft · version ${artifact.version} · not published",style=MaterialTheme.typography.titleSmall)
+                    Text("Saved draft · version ${artifact.version}",style=MaterialTheme.typography.titleSmall)
                     MarkdownReply(artifact.text)
                 }
                 run.events.takeLast(8).forEach { event ->
