@@ -4,7 +4,7 @@ import com.kai.agent.inference.Completion
 import com.kai.agent.inference.ProviderConfig
 
 /** A rejected proposal is never executable and is not evidence of a submitted operation. */
-class AgentResponseException(detail: String, val outputLimit: Boolean = false) : IllegalArgumentException(
+class AgentResponseException(detail: String, val outputLimit: Boolean = false, val actionOutstanding: Boolean = false) : IllegalArgumentException(
     "$detail This response did not execute an action. Check task history for earlier operations."
 )
 
@@ -21,10 +21,10 @@ class AgentResponseRecovery {
         return config.copy(maxOutputTokens = requestedOutput)
     }
 
-    fun parse(completion: Completion): AgentDecision {
+    fun parse(completion: Completion, validate: (AgentDecision)->Unit = {}): AgentDecision {
         require(completion.finishReason != "content_filter") { "The provider filtered this response. This response did not execute an action." }
         if (completion.finishReason == "length") throw AgentResponseException("The model reached its response limit before finishing.", outputLimit = true)
-        return AgentProtocol.parse(completion.text).also { consecutiveAttempts = 0 }
+        return AgentProtocol.parse(completion.text).also { validate(it);consecutiveAttempts = 0 }
     }
 
     fun parseNative(completion: Completion, parse: () -> AgentDecision): AgentDecision {
@@ -33,7 +33,7 @@ class AgentResponseRecovery {
         return parse().also { consecutiveAttempts = 0 }
     }
 
-    fun correction(error: AgentResponseException? = null): String? {
+    fun correction(error: AgentResponseException? = null, native: Boolean = false): String? {
         if (consecutiveAttempts >= 2 || attempts >= 6) return null
         attempts++
         consecutiveAttempts++
@@ -41,13 +41,13 @@ class AgentResponseRecovery {
         // Do not feed rejected fragments back as instructions, fake results, or action permission.
         // The caller retains the original request, exact schemas and operation receipts.
         return "Phone format check: the last model response was rejected before any action from that response ran. " +
-            "Return exactly ONE complete JSON object for the next remaining step, with type first. " +
-            "No commentary, fences, alternatives or second object. Keep it concise. " +
-            "End the object with its matching brace only; do not append a bracket, code or prose. " +
+            (if(native) "Use one registered native function with complete arguments for the next step, or a final reply for completed work. For an actual missing input or blocker, use the explicit outcome form. "
+             else "Return exactly ONE complete JSON object for the next remaining step, with type first. No commentary, fences, alternatives or second object. End with its matching brace. ") +
+            (if(error?.actionOutstanding==true) "The requested action is still unprepared; a readiness or confirmation message cannot finish it. ${AgentProtocol.ACTION_REVIEW} ${AgentProtocol.INCOMPLETE_OUTCOME} " else "") +
             "Preserve the remaining task step and existing receipts instead of restarting broad research after a format error. " +
             (if (error?.outputLimit == true) "The response ran out of output tokens. Finish one smaller content chunk, within 16,000 UTF-8 bytes of arguments; use later append actions for the remainder. Reuse any existing document ID from receipts. Do not recreate a submitted document. " else "") +
             "Use only the supplied account IDs, discovered tools and exact schema fields. " +
-            "Ask a clarification with reply if required details are missing; never guess. " +
+            "Use needs_input for a specific missing required detail; never guess or request preliminary approval. " +
             "Earlier action receipts remain binding: never repeat RUNNING, UNKNOWN, ACCEPTED or SUCCEEDED operations. " +
             "This is a format correction, not new action authorization."
     }

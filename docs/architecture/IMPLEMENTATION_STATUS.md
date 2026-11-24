@@ -4,6 +4,14 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Action preparation and reply contract (0.5.8)
+
+The latest report retained the source text and discovered write schema but ended in preliminary confirmation prose before creating an approval card. The same model had produced a successful document proposal in the earlier 0.5.2 report. This exposes a reply-contract gap that predates 0.5.7; the exact cause of the model's changed choice is unproved.
+
+0.5.8 clarifies that a write call prepares review, and validates an outstanding effect against the existing reply outcome types. An ordinary final answer must not terminate unprepared work; the model must propose the action or identify missing input/an actual blocker. Both execution adapters use the same check and existing correction limits. Native corrections now retain their explanation. Intermediate research steps may still finish with text, while the final saved-task step owes the overall goal.
+
+This is a bounded runtime correction, not proof of semantic convergence. A model can still mislabel unnecessary confirmation as a question; all real effects still require exact phone approval. KAI-029/031 remain partial. See `docs/ACTION-REVIEW-CONTRACT.md` and `qa/0.5.8/VALIDATION.md` for replay evidence and the open physical/live gate.
+
 ## Research execution correction (0.5.7)
 
 The complete 0.5.6 report showed a regression before any action proposal: one invalid quotation rejected a batch of findings; canonical projection then omitted fetched page text because no findings existed; cached reads returned ambiguous pointers; repeated failed retrieval led the new progress controller to close collection and stop. A later answer-only request also omitted native protocol 2. These were application contract defects, separate from the earlier upstream 502.
