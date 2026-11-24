@@ -4,18 +4,19 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.3
+## Test release: 0.5.4
 
-The signed 0.5.3 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.4 test APK is distributed directly. The latest published release remains available above.
 
-- Recognizes supported Google Docs plain-text and structured body readbacks, including rendered Markdown headings and lists.
-- Checks the exact document, account and execution after write acknowledgement. Missing or truncated evidence stays unverified; changed text leaves a partial result without another write.
-- Makes verification evidence available to both chat and saved tasks, with the confirming read recorded in the encrypted run history.
-- Preserves 0.5.2 native continuation, exact action approval, saved research, uncertain-write protection, and signing continuity.
+- Counts model requests, planning, summaries, retries and finalization against one persisted run allowance. Interrupted requests retain uncertain usage; automatic resumes do not replenish the allowance.
+- Adds an optional estimated-credit allowance in Account and shows request/time/cost accounting in the run panel. Catalog estimates are not settled billing or a guaranteed charge cap.
+- Rejects empty Gmail messages and obvious placeholder draft IDs before review or dispatch, with bounded model correction and fresh exact approval.
+- Recognizes the Google Docs horizontal-rule rendering at the corresponding approved Markdown position, preserving full body comparison and same-document receipt checks.
+- Lets already approved saved-task actions settle after model exhaustion, without admitting more inference or replaying UNKNOWN writes.
 
-See [document verification](docs/DOCUMENT-VERIFICATION.md), [validation](qa/0.5.3/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete. Text verification does not establish factual accuracy, formatting, link destinations, sharing or delivery.
+See [run allowances](docs/RUN-ALLOWANCES.md), [document verification](docs/DOCUMENT-VERIFICATION.md), [validation](qa/0.5.4/VALIDATION.md) and the [implementation audit](docs/architecture/IMPLEMENTATION_STATUS.md). The 64-item roadmap remains incomplete.
 
-Install over the existing preview app. Schema 3 is unchanged. This update needs no additional server deployment or paid route probe. The user's successful 0.5.2 phone test is prior-release evidence; a new physical test of 0.5.3 remains separate from automated checks.
+Install over the existing preview app. Schema 3, package and signing identity are retained. No server deployment or new paid route probe is required. The supplied 0.5.3 phone report is regression evidence; a physical 0.5.4 test remains a separate gate.
 
 ## Account features
 

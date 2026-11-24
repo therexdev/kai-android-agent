@@ -4,6 +4,12 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Shared inference allowances and field regressions (0.5.4)
+
+KAI-016/018 now share durable model admission across chat and saved-task planning, summaries, retries/fallbacks and finalization. Request/input/output/active-model-time counters and optional catalog-estimated credits survive interruption and worker restarts. Missing usage retains reservations; only explicit continuation grants more allowance. Existing approved effects settle before new model admission, with UNKNOWN outcomes still unreplayed. Background memory, complete tool/network wall-clock accounting and authoritative billing settlement remain unfinished; both roadmap items stay partial.
+
+The supplied 0.5.3 Android 13 report exposed a schema-valid Gmail send with neither subject nor body and a literal placeholder draft read. The shared proposal check and direct transport now reject these inputs without filling or altering them; corrections need a fresh reviewed proposal. The report also exposed the Docs Markdown converter's 50-underscore thematic-rule rendering, now recognized only at the corresponding Markdown node. Full text and scope checks still apply. The old report is not proof of live 0.5.4 execution. See `docs/RUN-ALLOWANCES.md` and `qa/0.5.4/VALIDATION.md`.
+
 ## Document completion evidence (0.5.3)
 
 The user confirmed the 0.5.2 live research-to-document test on November 24. The production operator also reported the reviewed gateway active, GPT OSS 120B qualified and enabled. These are bounded live results, not qualification of every model or device.
@@ -45,7 +51,7 @@ Questions, partial outcomes, waiting approval, pause and failure are separate st
 
 Status counts: {"implemented": 23, "partial": 27, "gated": 1, "planned": 13}. These are inventory counts, not percentage completion or proof that a whole acceptance criterion passed.
 
-The largest unfinished prerequisites are a priced credit/deadline ledger across every model helper, claim-level source assurance, general provider replay formats and wider route qualification, additional read-back adapters, independent-read concurrency, a complete typed voice reducer, and modern physical Android lifecycle validation. Managed GPT OSS continuation/activation and the user-confirmed document scenario now have bounded live evidence; they do not close those broader requirements. These must precede a production-ready claim.
+The largest unfinished prerequisites are authoritative credit settlement and complete wall-clock/tool accounting across all background work, claim-level source assurance, general provider replay formats and wider route qualification, additional read-back adapters, independent-read concurrency, a complete typed voice reducer, and modern physical Android lifecycle validation. Managed GPT OSS continuation/activation and the user-confirmed document scenario now have bounded live evidence; they do not close those broader requirements. These must precede a production-ready claim.
 
 The broader product work remains explicit: portable skills/SDK and revocation manifests; paired code/browser hosts; isolated delegation; cross-device ownership; marketplace/rentals; optional OAuth onboarding; channel adapters; bounded permission grants; and a full visual workflow canvas. None is implied by adding MCP or a workflow JSON editor.
 

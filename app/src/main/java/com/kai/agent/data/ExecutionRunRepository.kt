@@ -37,7 +37,7 @@ class ExecutionRunRepository(private val store: KaiStore): RunRepository {
             val project=state.projects.firstOrNull { it.id==c.projectId }
             return MemoryRules.digest("${c.contextAfter}:${project?.forgottenBefore}:${state.memoryGraph.deletionEpoch}:${state.settings.useMemory}:${state.memoryTombstones}:${state.memoryGraph.suppressions}:${state.deletedDocumentIds}").take(15).toLong(16)
         }
-        fun recover(r: ExecutionRun) = if(r.state==ExecutionState.RUNNING) r.copy(state=ExecutionState.PAUSED,owner="",detail="Interrupted. Continue saved work.",revision=r.revision+1) else r
+        fun recover(r: ExecutionRun) = if(r.state==ExecutionState.RUNNING) r.copy(state=ExecutionState.PAUSED,owner="",detail="Interrupted. Continue saved work.",revision=r.revision+1,budget=r.budget.copy(inference=r.budget.inference.recover())) else r
         fun invalidate(previous: KaiState, next: KaiState): KaiState {
             val kept=next.executions.mapNotNull { r ->
                 if(next.conversations.none { it.id==r.conversationId }) return@mapNotNull null

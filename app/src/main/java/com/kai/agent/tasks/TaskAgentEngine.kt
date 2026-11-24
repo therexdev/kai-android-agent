@@ -122,7 +122,7 @@ class TaskAgentEngine(
             val remaining = (timeBudgetMillis - (android.os.SystemClock.elapsedRealtime() - started)).coerceAtLeast(1)
             val deadline = minOf(InferenceTimeoutPolicy.taskTurnMillis(provider.provider), remaining)
             trace?.record("saved_inference_deadline", JSONObject().put("timeoutMs", deadline))
-            return withTimeout(deadline) { complete(provider, messages) }
+            return withTimeout(deadline) { requireNotNull(runtime).infer(provider,messages,InferencePurpose.PLAN) { complete(provider, messages) } }
         }
         try {
             smallContext = compactContext(config())
@@ -133,9 +133,9 @@ class TaskAgentEngine(
             val fallbackProfiles=if(account.fallbackModels.isEmpty() && current().steps.none { it.modelId.isNotBlank() }) emptyList() else {
                 val catalog=com.kai.agent.account.CreditAccountClient().overview(account).models.associateBy { it.id }
                 nodeConfigs=catalog.values.filter { it.available && (!account.freeOnly || it.freeEligible) }.associate { model -> model.id to
-                    account.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil).inference() }
+                    account.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil,pricing=CreditPricing.from(model,model.priceObservedAt)).inference() }
                 account.fallbackModels.mapNotNull { catalog[it] }.filter { it.available && (!account.freeOnly || it.freeEligible) }.map {
-                    account.copy(model=it.id,contextTokens=it.contextTokens,maxOutput=it.maxOutput,nativeTools=it.nativeTools,nativeQualificationId=it.nativeQualificationId,nativeQualifiedUntil=it.nativeQualifiedUntil).inference()
+                    account.copy(model=it.id,contextTokens=it.contextTokens,maxOutput=it.maxOutput,nativeTools=it.nativeTools,nativeQualificationId=it.nativeQualificationId,nativeQualifiedUntil=it.nativeQualifiedUntil,pricing=CreditPricing.from(it,it.priceObservedAt)).inference()
                 }
             }
             nodeCatalogReady=true
@@ -148,13 +148,12 @@ class TaskAgentEngine(
                 if(saved.routineId.isBlank()) RunOrigin.TASK else RunOrigin.ROUTINE,GoalContract.infer(saved.goal),
                 projectId=saved.projectId,privacyRevision=ExecutionRunRepository.privacy(store.state.value,saved.conversationId),createdAt=now(),
                 observations=saved.currentStep?.let { step -> step.messages.drop(2).filter { it.role in setOf("user","tool") }.map { RunObservation(newId(),step.id,it.content,now()) } }.orEmpty(),
-                budget=RunBudget(maxModelSteps=192,maxOutputTokens=524288)))
+                budget=RunBudget(maxModelSteps=192,maxOutputTokens=524288,inference=InferenceLedger.allowance(true,account.runCreditLimit))))
             if(current().steps.isEmpty()) {
                 if(requireNotNull(runtime).record.budget.exhausted) return hold(RunStatus.PAUSED,"Run budget reached; review before continuing.")
                 requireNotNull(runtime).admit()
                 val planned=infer(listOf(InferenceMessage("system","Plan the user's task into 1 to 8 concrete ordered steps. The phone can search the public web, read public HTTPS pages and use connected services after exact action approval. Do not execute anything. Do not add work beyond the request. Return only JSON: {\"steps\":[{\"title\":\"short title\",\"instructions\":\"specific step\"}]}"),InferenceMessage("user",current().goal)))
                 require(planned.finishReason !in setOf("length","content_filter")) { "The plan was incomplete. Resume to try again." }
-                planned.usage?.let { requireNotNull(runtime).usage(it.inputTokens,it.outputTokens) }
                 val steps=parsePlan(planned.text)
                 store.editRun(id,token) { it.copy(steps=steps,detail="Plan saved · ${steps.size} steps") }
             }
@@ -163,28 +162,35 @@ class TaskAgentEngine(
             var contextManager=AgentContextManager()
             var managedRevision: Long?=null
             var managedStep=""
-            requireNotNull(runtime).drive {
-                currentCoroutineContext().ensureActive()
-                mark("task_step")
-                var run=current();var step=run.currentStep ?: run { hold(RunStatus.COMPLETED,"Finished"); return@drive }
-                if(android.os.SystemClock.elapsedRealtime()-started>=timeBudgetMillis) run { hold(RunStatus.QUEUED,"Progress saved; continuing shortly"); return@drive }
+            requireNotNull(runtime).drive(settlePending = {
+                val step=current().currentStep
+                if(step==null) { hold(RunStatus.COMPLETED,"Finished"); return@drive }
+                if(android.os.SystemClock.elapsedRealtime()-started>=timeBudgetMillis) { hold(RunStatus.QUEUED,"Progress saved; continuing shortly"); return@drive }
                 if(step.pendingActionId.isNotBlank()) {
-                    val task=store.state.value.tasks.first { it.id==step.pendingActionId }
+                    var task=store.state.value.tasks.first { it.id==step.pendingActionId }
+                    if(task.status==TaskStatus.READY) {
+                        verifyCredentials(); execute(task)
+                        task=store.state.value.tasks.first { it.id==step.pendingActionId }
+                    }
                     when(task.status) {
-                        TaskStatus.AWAITING_APPROVAL -> run { hold(RunStatus.NEEDS_APPROVAL,"Review the exact action to continue"); return@drive }
-                        TaskStatus.RUNNING,TaskStatus.UNKNOWN -> run { hold(RunStatus.BLOCKED,"Check this action in the connected service. Its final outcome is not confirmed; automatic replay is disabled."); return@drive }
+                        TaskStatus.AWAITING_APPROVAL -> hold(RunStatus.NEEDS_APPROVAL,"Review the exact action to continue")
+                        TaskStatus.RUNNING,TaskStatus.UNKNOWN -> hold(RunStatus.BLOCKED,"Check this action in the connected service. Its final outcome is not confirmed; automatic replay is disabled.")
                         TaskStatus.DRAFT -> { store.transitionTask(task.id,TaskStatus.CANCELLED,"Credentials changed; a new review is required");store.consumeRunAction(id,token,task.id) }
-                        TaskStatus.READY -> { verifyCredentials(); execute(task);return@drive }
+                        TaskStatus.READY -> error("The approved action did not settle; check Tasks before continuing.")
                         TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED,TaskStatus.FAILED,TaskStatus.CANCELLED -> {
                             if(task.status in setOf(TaskStatus.SUCCEEDED,TaskStatus.ACCEPTED) && task.intent!=null) {
-                                val tool=toolRouter.tool(task.intent.toolName,task.intent.toolVersion)
-                                if(!tool.readOnly && tool.schemaJson==task.intent.toolSchemaJson) mark("effect_recorded",task.id)
+                                val intent=requireNotNull(task.intent)
+                                val tool=toolRouter.tool(intent.toolName,intent.toolVersion)
+                                if(!tool.readOnly && tool.schemaJson==intent.toolSchemaJson) mark("effect_recorded",task.id)
                             }
                             store.consumeRunAction(id,token,task.id)
                         }
                     }
                 }
-                run=current();step=requireNotNull(run.currentStep)
+            }) {
+                currentCoroutineContext().ensureActive()
+                mark("task_step")
+                var run=current();var step=requireNotNull(run.currentStep)
                 val routeMessages=RunReplay.stepMessages(step.messages,config())
                 if(routeMessages!=step.messages) { run=editStep { it.copy(messages=routeMessages,contextSummary="") };step=requireNotNull(run.currentStep) }
                 if(managedStep!=step.id || harness.native!=config().nativeTools) { smallContext=compactContext(config());harness=AgentHarness(config().nativeTools) }
@@ -207,7 +213,7 @@ class TaskAgentEngine(
                 val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) })
                 turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
                     step.tools.map { ToolReference(it.accountId,it.toolId,it.version) })
-                val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> complete(c,m) },onChange={ change ->
+                val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> infer(c,m,InferencePurpose.SUMMARY) { complete(c,m) } },onChange={ change ->
                     currentCoroutineContext().ensureActive()
                     trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
                     store.editRun(id,token) { it.copy(detail="Optimizing context…") }
@@ -215,7 +221,7 @@ class TaskAgentEngine(
                 if(revision(current())!=contextRevision) return@drive
                 editStep { if(it.contextRevision==contextRevision) it.copy(contextSummary=contextManager.summaryCheckpoint()) else it }
                 val completion=try { withTimeout(minOf(InferenceTimeoutPolicy.taskTurnMillis(nativeConfig.provider),(timeBudgetMillis-(android.os.SystemClock.elapsedRealtime()-started)).coerceAtLeast(1))) {
-                    complete(nativeConfig,working)
+                    infer(nativeConfig,working,InferencePurpose.AGENT) { complete(nativeConfig,working) }
                 } } catch(error: InferenceException) {
                     if(contextManager.recover(error)) { trace?.record("context_overflow_recovery");return@drive }
                     if(inferenceRecovery.retry(config(),error)) { mark("model_retry",error.failureCode.name);return@drive }
@@ -229,7 +235,6 @@ class TaskAgentEngine(
                     throw error
                 }
                 contextManager.observe(completion)
-                completion.usage?.let { usage(it.inputTokens,it.outputTokens) }
                 current()
                 if(revision(current())!=contextRevision) return@drive // A forget/edit wins over a stale model response.
                 val question=runCatching { JSONObject(completion.text).takeIf { it.optString("type")=="needs_input" }?.getString("text") }.getOrNull()
@@ -334,8 +339,11 @@ class TaskAgentEngine(
                 }
             }
             val savedResult=store.state.value.runs.first { it.id==id }
-            if(savedResult.status==RunStatus.RUNNING) return hold(RunStatus.PAUSED,"Budget reached; progress saved. Review before resuming.")
+            if(savedResult.status==RunStatus.RUNNING) return hold(RunStatus.PAUSED,runtime?.record?.detail?.takeIf { it.isNotBlank() } ?: "Budget reached; progress saved. Review before resuming.")
             return savedResult
+        } catch(e: RunBudgetExceeded) {
+            runtime?.takeIf { it.record.state==ExecutionState.RUNNING }?.finish(ExecutionState.PARTIAL,e.message.orEmpty(),FailureCode.BUDGET)
+            return hold(RunStatus.PAUSED,e.message.orEmpty())
         } catch(e: TimeoutCancellationException) {
             trace?.error("saved_task_timeout",e)
             currentCoroutineContext().ensureActive()

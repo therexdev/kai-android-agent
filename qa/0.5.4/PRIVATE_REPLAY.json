@@ -1,0 +1,13 @@
+{
+  "source": "User-provided 0.5.3 Android report; private contents excluded",
+  "result": "PASS",
+  "assertions": [
+    "Latest successful document read matches approved body, including converter thematic-rule rendering",
+    "Captured empty Gmail message rejected before preparation or dispatch",
+    "Captured placeholder draft read rejected without service IO"
+  ],
+  "live_calls_made": 0,
+  "verifier_source_sha256": "2df0546d196730f69a6b7318465324350439fd8e15aacc5fa3e10ffab3bb116a",
+  "action_rules_source_sha256": "b26c3431e041e5dd36c03fc2724297c431f4195dd883af8d631d392164a96f78",
+  "compiled_bytecode_replay": "PASS"
+}

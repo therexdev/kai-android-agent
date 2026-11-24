@@ -15,26 +15,29 @@ data class CreditAccount(
     val nativeTools: Boolean = false,
     val preferredOutput: Int = 4096, val fallbackModels: List<String> = emptyList(),
     val nativeQualificationId: String = "", val nativeQualifiedUntil: Long = 0,
+    val pricing: com.kai.agent.runtime.CreditPricing? = null, val runCreditLimit: Int = 0,
 ) {
     override fun toString() = "CreditAccount(credentials=<redacted>)"
     fun json(secrets: Boolean) = if (!secrets) JSONObject() else JSONObject()
         .put("nativeQualificationId",nativeQualificationId).put("nativeQualifiedUntil",nativeQualifiedUntil)
+        .put("pricing",pricing?.json() ?: JSONObject.NULL).put("runCreditLimit",runCreditLimit)
         .put("token",token).put("id",id).put("email",email).put("wallet",wallet).put("model",model)
         .put("preferredOutput",preferredOutput).put("fallbackModels",org.json.JSONArray(fallbackModels)).put("nativeTools",nativeTools).put("contextTokens",contextTokens).put("maxOutput",maxOutput).put("freeOnly",freeOnly)
         .put("linkCode",linkCode).put("linkSecret",linkSecret).put("linkExpiresAt",linkExpiresAt)
     fun inference(output: Int = preferredOutput) = ProviderConfig(ProviderId.KOINOS, "$CREDIT_ORIGIN/platform/api", token, model,
         RoutingMode.NETWORK_ONLY, minOf(output,maxOutput), accountSession=true, creditWallet=wallet,
-        freeOnly=freeOnly, contextTokens=contextTokens, modelOutputLimit=maxOutput, nativeTools=nativeTools && nativeQualificationId.matches(Regex("[a-f0-9]{64}")) && nativeQualifiedUntil>System.currentTimeMillis(), allowOutputGrowth=false, nativeQualificationId=nativeQualificationId)
+        freeOnly=freeOnly, contextTokens=contextTokens, modelOutputLimit=maxOutput, nativeTools=nativeTools && nativeQualificationId.matches(Regex("[a-f0-9]{64}")) && nativeQualifiedUntil>System.currentTimeMillis(), allowOutputGrowth=false, nativeQualificationId=nativeQualificationId,creditPricing=pricing)
     companion object {
         fun read(o: JSONObject?) = if(o==null) CreditAccount() else CreditAccount(
             o.optString("token"),o.optString("id"),o.optString("email"),o.optString("wallet"),o.optString("model").ifBlank { DEFAULT_CREDIT_MODEL },
             o.optInt("contextTokens",4096).coerceIn(1024,2_000_000),o.optInt("maxOutput",2048).coerceIn(1,131072),
             o.optBoolean("freeOnly",true),o.optString("linkCode"),o.optString("linkSecret"),o.optLong("linkExpiresAt"), o.optBoolean("nativeTools",false),o.optInt("preferredOutput",4096).coerceIn(1024,8192),
-            o.optJSONArray("fallbackModels")?.let { a -> (0 until minOf(a.length(),8)).map { a.getString(it).take(300) }.distinct() }.orEmpty(),o.optString("nativeQualificationId"),o.optLong("nativeQualifiedUntil"))
+            o.optJSONArray("fallbackModels")?.let { a -> (0 until minOf(a.length(),8)).map { a.getString(it).take(300) }.distinct() }.orEmpty(),o.optString("nativeQualificationId"),o.optLong("nativeQualifiedUntil"),
+            com.kai.agent.runtime.CreditPricing.read(o.optJSONObject("pricing")),o.optInt("runCreditLimit",0).also { require(it in setOf(0,1,5,10,25)) })
     }
 }
 data class CreditModel(val id: String,val label: String,val available: Boolean,val freeEligible: Boolean,
-    val maxOutput: Int,val contextTokens: Int,val inputPrice: String,val outputPrice: String,val nativeTools: Boolean=false,val nativeQualificationId: String="",val nativeQualifiedUntil: Long=0)
+    val maxOutput: Int,val contextTokens: Int,val inputPrice: String,val outputPrice: String,val nativeTools: Boolean=false,val nativeQualificationId: String="",val nativeQualifiedUntil: Long=0,val priceObservedAt: Long=0)
 data class AccountOverview(val id: String,val email: String,val wallets: List<String>,val selectedWallet: String,
     val freeCredits: String,val paidCredits: String,val freeState: String,val models: List<CreditModel>,val vaultAvailable: Boolean=false,
     val primaryCreditWallet: String="",val walletLabels: Map<String,String> = emptyMap()) {

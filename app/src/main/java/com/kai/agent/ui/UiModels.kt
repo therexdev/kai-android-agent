@@ -115,6 +115,7 @@ data class KaiUiState(
     val providerConfig: KaiProviderConfig = KaiProviderConfig(),
     val account: com.kai.agent.account.AccountUi = com.kai.agent.account.AccountUi(),
     val preferredOutput: Int = 4096,
+    val runCreditLimit: Int = 0,
     val fallbackModels: List<String> = emptyList(),
     val providerStatus: String = "Choose your AI to get started",
     val providerConnected: Boolean = false,
@@ -166,6 +167,7 @@ interface KaiUiActions {
     fun accountRefresh() {}
     fun accountSignOut() {}
     fun setAgentOutput(tokens: Int) {}
+    fun setRunCreditLimit(credits: Int) {}
     fun setFallbackModels(ids: List<String>) {}
     fun accountSelectModel(id: String) {}
     fun accountSelectWallet(address: String) {}

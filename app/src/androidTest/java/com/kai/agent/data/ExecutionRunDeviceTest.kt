@@ -15,6 +15,29 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ExecutionRunDeviceTest {
+    @Test fun modelAdmissionSurvivesEncryptedRestartWithoutRefundOrReplay()=runBlocking {
+        isolated { context ->
+            val first=EncryptedKaiDatabase(context);val initial=first.openOrMigrate { null }
+            val chat=Conversation(id="budget-chat",title="Budget",characterId="kai",createdAt=1,updatedAt=1)
+            val config=com.kai.agent.inference.ProviderConfig(com.kai.agent.inference.ProviderId.KOINOS,"https://example.com","private-credential","model",maxOutputTokens=128)
+            val attempt=InferenceLedger.request(config,listOf(com.kai.agent.inference.InferenceMessage("user","private-prompt-sentinel")),InferencePurpose.SUMMARY,1000,100)
+            val ledger=InferenceLedger(maxAttempts=1).reserve(attempt,128)
+            val execution=ExecutionRun("budget-run",chat.id,"message",RunOrigin.CHAT,GoalContract("Research"),privacyRevision=1,createdAt=1,
+                state=ExecutionState.RUNNING,owner="old-owner",budget=RunBudget(inference=ledger))
+            first.save(initial.copy(conversations=listOf(chat),executions=listOf(execution)));first.close()
+            val reopened=EncryptedKaiDatabase(context)
+            try {
+                val restored=reopened.openOrMigrate { error("Existing data must be preserved") }
+                val recovered=ExecutionRunRepository.recover(restored.executions.single())
+                assertEquals(ExecutionState.PAUSED,recovered.state);assertEquals("",recovered.owner)
+                assertEquals(ledger.input,recovered.budget.inference.input);assertEquals(100L,recovered.budget.inference.millis)
+                assertEquals(AttemptState.INTERRUPTED,recovered.budget.inference.history.single().state)
+                assertTrue(recovered.budget.exhausted);assertTrue(restored.tasks.isEmpty())
+                val exported=KaiJson.encode(restored,false)
+                assertFalse(exported.contains("private-credential"));assertFalse(exported.contains("private-prompt-sentinel"))
+            } finally { reopened.close() }
+        }
+    }
     @Test fun preApprovalResearchIsEncryptedAndRestartDoesNotReplayEffects()=runBlocking {
         isolated { context ->
             val first=KaiStore(context);first.load()
