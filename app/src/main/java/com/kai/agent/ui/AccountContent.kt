@@ -98,6 +98,13 @@ internal fun AccountContent(state: KaiUiState, actions: KaiUiActions, onClose: (
                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     listOf(2048,4096,8192).forEach { limit -> FilterChip(selected=state.preferredOutput==limit,onClick={actions.setAgentOutput(limit)},label={Text(limit.toString())}) }
                 }
+                Text("Estimated credit allowance",style=MaterialTheme.typography.titleMedium)
+                Text("For new chat and saved-task runs and explicit continuations, including retries and summaries. Background memory processing is separate. Estimates use catalog prices; they are not settled charges or a guaranteed billing cap. Free/purchased credit settings still apply.",style=MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    listOf(0,1,5,10,25).forEach { limit -> FilterChip(selected=state.runCreditLimit==limit,
+                        onClick={actions.setRunCreditLimit(limit)},label={Text(if(limit==0) "No extra limit" else "$limit credits")}) }
+                }
+                Text("Model work also has request, token and time limits. Reaching a limit saves progress for review; waiting for your approval does not use model time.",style=MaterialTheme.typography.bodySmall)
                 Text("Optional fallback models",style=MaterialTheme.typography.titleMedium)
                 Text("Selected models are tried in the order shown, within the same credit account and free/paid policy. Fallback never repeats an external action. Models with a different tool protocol are skipped.",style=MaterialTheme.typography.bodySmall)
                 state.fallbackModels.forEachIndexed { index,id ->

@@ -28,6 +28,11 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
                 else -> "Paused · progress saved"
             },style=MaterialTheme.typography.titleSmall)
             if(run.detail.isNotBlank()) Text(run.detail,style=MaterialTheme.typography.bodySmall)
+            if(run.resumable && (run.budget.exhausted || run.failure==FailureCode.BUDGET)) {
+                val allowance=InferenceLedger.allowance(run.origin!=RunOrigin.CHAT,state.runCreditLimit)
+                Text("Continue allows up to ${allowance.maxAttempts} more model requests and ${allowance.maxMillis/60000} minutes of model time"+
+                    if(state.runCreditLimit>0) ", with a ${state.runCreditLimit}-credit estimate allowance." else ". Your credit policy still applies.",style=MaterialTheme.typography.bodySmall)
+            }
             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 if(run.resumable && !state.isBusy) {
                     TextButton(onClick={actions.continueExecution(run.id,false)}) { Text("Continue") }
@@ -40,6 +45,13 @@ internal fun ExecutionPanel(state: KaiUiState, actions: KaiUiActions, selected: 
             }
             if(expanded) {
                 Text("${run.budget.modelSteps} steps · ${run.budget.inputTokens+run.budget.outputTokens} reported tokens",style=MaterialTheme.typography.bodySmall)
+                val allowance=run.budget.inference
+                Text("${allowance.input}/${allowance.maxInput} input allowance · ${allowance.output}/${run.budget.maxOutputTokens} output allowance",style=MaterialTheme.typography.bodySmall)
+                Text("${allowance.attempts}/${allowance.maxAttempts} model requests · ${allowance.summaries} summaries · ${allowance.millis/1000}s model time",style=MaterialTheme.typography.bodySmall)
+                Text("Catalog cost estimate: ${CreditPricing.display(allowance.estimatedMicroCredits)} credits"+
+                    if(allowance.unpriced>0) " · ${allowance.unpriced} requests without a price" else " · not settled billing",style=MaterialTheme.typography.bodySmall)
+                if(allowance.unreported>0) Text("Usage was not returned for ${allowance.unreported} requests; their token and cost allowances are retained.",style=MaterialTheme.typography.bodySmall)
+                if(allowance.legacy) Text("Calls made before 0.5.4 were not fully measured.",style=MaterialTheme.typography.bodySmall)
                 run.artifacts.lastOrNull()?.let { artifact ->
                     Text("Saved draft · version ${artifact.version} · not published",style=MaterialTheme.typography.titleSmall)
                     MarkdownReply(artifact.text)

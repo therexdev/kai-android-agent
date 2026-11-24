@@ -6,6 +6,7 @@ import com.kai.agent.agent.AgentResponseException
 /** Classification is separate from admission. No retry of an external effect is ever proposed here. */
 object RecoveryPolicy {
     fun classify(error: Exception): FailureCode = when(error) {
+        is RunBudgetExceeded -> FailureCode.BUDGET
         is InferenceException -> error.failureCode
         is AgentResponseException -> if(error.outputLimit) FailureCode.OUTPUT_EXHAUSTED else FailureCode.MALFORMED_PROPOSAL
         is java.net.SocketTimeoutException, is kotlinx.coroutines.TimeoutCancellationException -> FailureCode.TIMEOUT

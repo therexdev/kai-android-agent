@@ -37,6 +37,19 @@ class DocumentVerificationTest {
     @Test fun headingsEmphasisAndLinkLabelsAreVisibleTextOnly() {
         assertTrue(check(write("# Heading\n\n**Bold** and *italic* with [label](https://example.com)."),read("Heading\nBold and italic with label.")).matched)
     }
+    @Test fun thematicRuleRenderingMatchesOnlyAtTheApprovedMarkdownPosition() {
+        val rule="_".repeat(50)
+        for ((markdown,plain) in listOf("Before.\n\n---\n\nAfter." to "Before.\n$rule\nAfter.",
+            "---\n\nAfter." to "$rule\nAfter.", "Before.\n\n---" to "Before.\n$rule")) {
+            assertTrue(check(write(markdown),read(plain)).matched)
+            assertTrue(check(write(markdown),read(plain.replace(rule,""))).matched)
+        }
+        assertFalse(check(write("Before.\n\nAfter."),read("Before.\n$rule\nAfter.")).matched)
+        assertFalse(check(write("Before.\n\n---\n\nAfter."),read("Before.\n$rule")).matched)
+        assertFalse(check(write("Before.\n\n---\n\nAfter."),read("$rule\nBefore.\nAfter.")).matched)
+        assertFalse(check(write("Before.\n\n---\n\nAfter."),read("Before.\nInjected.\nAfter.")).matched)
+        assertFalse(check(write("Before.\n$rule\nAfter.","GOOGLEDOCS_CREATE_DOCUMENT","text"),read("Before.\nAfter.")).matched)
+    }
     @Test fun wholeDocumentMustMatchIncludingLastParagraphAndExtraContent() {
         for(actual in listOf(plain.substringBefore("Example Two"),plain+"Unrequested addition.",plain.replace("useful","incorrect"))) {
             assertEquals(DocumentVerification.Status.TEXT_DIFFERS,check(r=read(actual)).status)

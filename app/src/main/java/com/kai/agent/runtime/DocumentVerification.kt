@@ -135,7 +135,7 @@ object DocumentVerification {
     private fun markdownPattern(source: String): Regex? {
         // The supported Docs Markdown action also expands escaped line separators. This does
         // not mutate approved arguments. Code/HTML/images are deliberately not verified as prose.
-        if ('\uE000' in source) return null
+        if ('\uE000' in source || '\uE001' in source) return null
         val sourceText = if ('\n' !in source) source.replace("\\n", "\n") else source
         if (Regex("(?m)^\\s*\\|.*\\|\\s*$").containsMatchIn(sourceText)) return null
         val root = Parser.builder().build().parse(sourceText)
@@ -144,6 +144,7 @@ object DocumentVerification {
             when (node) {
                 is Text -> out.append(node.literal)
                 is SoftLineBreak, is HardLineBreak -> out.append(' ')
+                is ThematicBreak -> out.append(" \uE001 ")
                 is Code, is FencedCodeBlock, is IndentedCodeBlock, is HtmlBlock, is HtmlInline, is Image -> supported = false
                 else -> {
                     if (node is Block) out.append(' ')
@@ -160,6 +161,22 @@ object DocumentVerification {
         if (text.replace("\uE000", "").isBlank()) return null
         // Rendered list markers are optional ONLY at positions of actual Markdown list items.
         // Never strip a number or punctuation from an ordinary paragraph or literal write.
-        return Regex(text.split('\uE000').joinToString("(?:(?:[●•▪◦*+\\-]|[0-9]+[.)]) )?") { Regex.escape(it) })
+        fun prose(value: String) = value.split('\uE000').joinToString("(?:(?:[●•▪◦*+\\-]|[0-9]+[.)]) )?") { Regex.escape(it) }
+        // The Docs Markdown converter renders a thematic break as exactly 50 underscores.
+        // Permit that rendering only at the corresponding AST node; never strip underscores
+        // or punctuation elsewhere, or accept missing body text as a formatting difference.
+        val parts = text.split('\uE001').map(String::trim)
+        if (parts.all { it.replace("\uE000", "").isBlank() }) return null
+        val pattern = StringBuilder(prose(parts.first()))
+        for (index in 1 until parts.size) {
+            val left = parts[index-1].isNotEmpty(); val right = parts[index].isNotEmpty()
+            pattern.append(when {
+                left && right -> " (?:_{50} )?"
+                left -> "(?: _{50})?"
+                right -> "(?:_{50} )?"
+                else -> "(?:_{50} ?)?"
+            }).append(prose(parts[index]))
+        }
+        return Regex(pattern.toString())
     }
 }

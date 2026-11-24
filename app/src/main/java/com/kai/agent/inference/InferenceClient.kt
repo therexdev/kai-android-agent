@@ -132,11 +132,13 @@ class InferenceClient(client: OkHttpClient? = null,
         onDelta: suspend (String) -> Unit,
     ): Completion {
         val trace=currentCoroutineContext()[TraceContext]?.trace
-        val requestId=com.kai.agent.data.newId()
+        val admission=currentCoroutineContext()[com.kai.agent.runtime.InferenceAttemptContext]
+        val requestId=admission?.id ?: com.kai.agent.data.newId()
         val started=clockMillis()
         val pending=java.util.concurrent.ConcurrentLinkedQueue<Pair<String,JSONObject>>()
         suspend fun drain() { while(true) { val item=pending.poll() ?: break; trace?.record(item.first,item.second.put("requestId",requestId)) } }
         trace?.record("model_start",JSONObject().put("requestId",requestId).put("provider",config.provider.name).put("model",config.modelId)
+            .put("runPurpose",admission?.purpose?.name ?: JSONObject.NULL)
             .put("endpoint",config.endpoint).put("routing",config.routing.name).put("messageCount",messages.size).put("toolProtocol",if(config.nativeTools) "native" else "legacy_json").put("toolCount",config.tools.size)
             .put("inputEstimateBeforeBudget",InferenceBudget.estimate(messages)).put("requestedMaxOutputTokens",config.maxOutputTokens))
         val text = StringBuilder()

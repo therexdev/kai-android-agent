@@ -29,9 +29,14 @@ data class GoalContract(val request: String, val kind: String = "answer", val re
     }
 }
 data class RunBudget(val modelSteps: Int = 0, val inputTokens: Long = 0, val outputTokens: Long = 0,
-    val corrections: Int = 0, val maxModelSteps: Int = 36, val maxOutputTokens: Long = 131072) {
-    val exhausted get() = modelSteps >= maxModelSteps || outputTokens >= maxOutputTokens
+    val corrections: Int = 0, val maxModelSteps: Int = 36, val maxOutputTokens: Long = 131072,
+    val inference: InferenceLedger = InferenceLedger()) {
+    val exhausted get() = modelSteps >= maxModelSteps || maxOf(outputTokens,inference.output) >= maxOutputTokens || inference.exhausted
     fun admit(): RunBudget { check(!exhausted) { "Run budget exhausted; progress is saved." }; return copy(modelSteps=modelSteps+1) }
+    fun extend(saved: Boolean, creditLimit: Int, finalOnly: Boolean = false) = copy(
+        maxModelSteps=(modelSteps+if(finalOnly) 2 else if(saved) 192 else 60).coerceAtMost(10000),
+        maxOutputTokens=maxOf(outputTokens,inference.output)+(if(finalOnly) 2048 else if(saved) 524288 else 131072),
+        inference=inference.extend(saved,creditLimit,finalOnly))
 }
 data class RunEvent(val sequence: Long, val at: Long, val kind: String, val code: String = "")
 data class RunObservation(val id: String,val stepId: String,val content: String,val createdAt: Long)

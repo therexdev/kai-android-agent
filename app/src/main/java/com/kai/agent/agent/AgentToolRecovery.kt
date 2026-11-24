@@ -79,7 +79,7 @@ class AgentToolRecovery {
             }
         }
         if (decision is AgentDecision.PrepareAction) {
-            try { validateAction(decision, tool); ConnectionArguments.validate(decision.arguments.toString(), tool.schemaJson) }
+            try { validateAction(decision, tool); ConnectionArguments.validate(decision.arguments.toString(), tool.schemaJson); ActionInputRules.validate(tool,decision.arguments) }
             catch (error: ConnectionServiceException) {
                 consumeAttempt()
                 check(inputFailures.add("$accountId:$toolId:${error.message}")) {

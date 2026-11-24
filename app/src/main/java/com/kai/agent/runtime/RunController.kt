@@ -4,8 +4,9 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 /** The single bounded execution driver for interactive and scheduled adapters. Never replays effects. */
-class RunController(private val repository: RunRepository, private val clock: ()->Long = System::currentTimeMillis) {
-    suspend fun open(record: ExecutionRun): Session = Session(repository.claim(record,UUID.randomUUID().toString()))
+class RunController(private val repository: RunRepository, private val clock: ()->Long = System::currentTimeMillis,
+    private val elapsedClock: ()->Long = { System.nanoTime()/1_000_000 }) {
+    suspend fun open(record: ExecutionRun): Session = Session(repository.claim(record.copy(budget=record.budget.copy(inference=record.budget.inference.recover())),UUID.randomUUID().toString()))
     inner class Session internal constructor(initial: ExecutionRun) {
         var record: ExecutionRun = initial; private set
         private val owner=initial.owner
@@ -32,7 +33,38 @@ class RunController(private val repository: RunRepository, private val clock: ()
                     mark("document_text_verified",code)
             }
         }
-        suspend fun usage(input: Int, output: Int) { mutate { it.copy(budget=it.budget.copy(inputTokens=it.budget.inputTokens+input.coerceAtLeast(0),outputTokens=it.budget.outputTokens+output.coerceAtLeast(0))) } }
+        /** Durable admission precedes EVERY transport call, including helpers and retries.
+         * A missing result retains token/cost reservations; a restart retains the full time reservation.
+         */
+        suspend fun infer(config: com.kai.agent.inference.ProviderConfig, messages: List<com.kai.agent.inference.InferenceMessage>,
+            purpose: InferencePurpose, call: suspend ()->com.kai.agent.inference.Completion): com.kai.agent.inference.Completion {
+            check()
+            val remaining=record.budget.inference.maxMillis-record.budget.inference.millis
+            val duration=minOf(remaining,com.kai.agent.inference.InferenceTimeoutPolicy.taskTurnMillis(config.provider))
+            val a=InferenceLedger.request(config,messages,purpose,clock(),duration)
+            mutate { r -> r.copy(budget=r.budget.copy(inference=r.budget.inference.reserve(a,r.budget.maxOutputTokens))).event("model_admitted",clock(),purpose.name) }
+            val start=elapsedClock()
+            var response: com.kai.agent.inference.Completion? = null
+            var interrupted=false
+            try {
+                response=withTimeout(duration.coerceAtLeast(1)) { withContext(InferenceAttemptContext(a.id,a.purpose)) { call() } }
+                return requireNotNull(response)
+            } catch(e: TimeoutCancellationException) {
+                currentCoroutineContext().ensureActive()
+                if(duration==remaining) throw RunBudgetExceeded("The run's model time allowance is used up. Progress is saved.")
+                throw e
+            } catch(e: CancellationException) { interrupted=true;throw e }
+            finally {
+                withContext(NonCancellable) {
+                    val reported=InferenceLedger.reported(response?.usage)
+                    // Ownership/privacy checks still apply: a late result cannot resurrect deleted work.
+                    mutate { r -> r.copy(budget=r.budget.copy(
+                        inputTokens=r.budget.inputTokens+(reported?.inputTokens ?: 0),outputTokens=r.budget.outputTokens+(reported?.outputTokens ?: 0),
+                        inference=r.budget.inference.settle(a.id,reported,elapsedClock()-start,interrupted)))
+                        .event("model_accounted",clock(),if(reported==null) "USAGE_UNKNOWN" else purpose.name) }
+                }
+            }
+        }
         suspend fun switchModel(route: String, protocol: String, archive: String) {
             mutate { it.copy(modelRoute=route,protocol=protocol,archive=archive).event("model_changed",clock()) }
         }
@@ -50,13 +82,19 @@ class RunController(private val repository: RunRepository, private val clock: ()
             }
         }
         /** The adapter performs exactly one safe step. Policy, lifetime and admission have one owner. */
-        suspend fun drive(step: suspend Session.()->Unit) {
+        suspend fun drive(settlePending: suspend Session.()->Unit = {}, step: suspend Session.()->Unit) {
             try {
                 while(!released) {
+                    check()
+                    // An already approved effect may settle without admitting new inference.
+                    settlePending()
+                    if(released) break
                     check()
                     if(record.budget.exhausted) { finish(ExecutionState.PARTIAL,"Run budget reached. Findings are saved; continue to authorize another bounded run.",FailureCode.BUDGET); break }
                     admit(); step()
                 }
+            } catch(e: RunBudgetExceeded) {
+                if(!released) finish(ExecutionState.PARTIAL,e.message.orEmpty(),FailureCode.BUDGET)
             } catch(e: CancellationException) {
                 withContext(NonCancellable) { if(!released) runCatching { finish(ExecutionState.PAUSED,"Interrupted; progress saved.",FailureCode.CANCELLED) } }; throw e
             } catch(e: Exception) {

@@ -126,7 +126,7 @@ class KaiViewModel(
                     val selected=current.creditAccount
                     val model=overview.models.firstOrNull { it.id==selected.model }
                     current.copy(creditAccount=selected.copy(email=overview.email,
-                        contextTokens=model?.contextTokens ?: selected.contextTokens,maxOutput=model?.maxOutput ?: selected.maxOutput,nativeTools=model?.nativeTools ?: false,nativeQualificationId=model?.nativeQualificationId.orEmpty(),nativeQualifiedUntil=model?.nativeQualifiedUntil ?: 0))
+                        contextTokens=model?.contextTokens ?: selected.contextTokens,maxOutput=model?.maxOutput ?: selected.maxOutput,nativeTools=model?.nativeTools ?: false,nativeQualificationId=model?.nativeQualificationId.orEmpty(),nativeQualifiedUntil=model?.nativeQualifiedUntil ?: 0,pricing=model?.let { CreditPricing.from(it,it.priceObservedAt) }))
                 }
             }
             mutableUi.update { it.copy(account=it.account.copy(busy=false,overview=overview,message="Balance updated. Purchases made on the website are available here."),providerConnected=true) }
@@ -149,6 +149,7 @@ class KaiViewModel(
             }
         }
     }
+    override fun setRunCreditLimit(credits: Int) { if(credits !in setOf(0,1,5,10,25)) return; safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(runCreditLimit=credits)) } } }
     override fun setAgentOutput(tokens: Int) { if(tokens !in setOf(2048,4096,8192)) return; safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(preferredOutput=tokens)) } } }
     override fun setFallbackModels(ids: List<String>) {
         val o=creditOverview ?: return
@@ -158,7 +159,7 @@ class KaiViewModel(
     override fun accountSelectModel(id: String) {
         val m=creditOverview?.models?.firstOrNull { it.id==id && it.available } ?: return
         stopGeneration();memoryRuntime.pause()
-        safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(model=m.id,contextTokens=m.contextTokens,maxOutput=m.maxOutput,nativeTools=m.nativeTools,nativeQualificationId=m.nativeQualificationId,nativeQualifiedUntil=m.nativeQualifiedUntil)) };memoryRuntime.kick() }
+        safely { store.updateSettings { it.copy(creditAccount=it.creditAccount.copy(model=m.id,contextTokens=m.contextTokens,maxOutput=m.maxOutput,nativeTools=m.nativeTools,nativeQualificationId=m.nativeQualificationId,nativeQualifiedUntil=m.nativeQualifiedUntil,pricing=CreditPricing.from(m,m.priceObservedAt))) };memoryRuntime.kick() }
     }
     override fun accountSelectWallet(address: String) {
         if(address.isNotBlank() && creditOverview?.wallets?.contains(address)!=true)return
@@ -420,7 +421,7 @@ class KaiViewModel(
             localSpeechOnly = state.settings.localSpeechOnly,
             reducedMotion = state.settings.reducedMotion,
             hapticsEnabled = state.settings.hapticsEnabled,
-            runs = state.runs.sortedByDescending { it.updatedAt }, executions=state.executions, templates=state.templates, mcpServers=state.settings.mcpServers.map { it.copy(token="") }, preferredOutput=state.settings.creditAccount.preferredOutput,fallbackModels=state.settings.creditAccount.fallbackModels, routines = state.routines,
+            runs = state.runs.sortedByDescending { it.updatedAt }, executions=state.executions, templates=state.templates, mcpServers=state.settings.mcpServers.map { it.copy(token="") }, preferredOutput=state.settings.creditAccount.preferredOutput,runCreditLimit=state.settings.creditAccount.runCreditLimit,fallbackModels=state.settings.creditAccount.fallbackModels, routines = state.routines,
             projects = state.projects, projectId = conversation?.projectId.orEmpty(),
             documents = com.kai.agent.projects.ProjectContext.documents(state,conversation?.projectId.orEmpty(),conversationId.orEmpty()),
             selectedDocuments = selectedDocuments,
@@ -643,9 +644,9 @@ class KaiViewModel(
         val record=oldExecution?.also { require(it.conversationId==cid && it.goal.request==userText) }
             ?: ExecutionRun(newId(),cid,sourceId,RunOrigin.CHAT,GoalContract.infer(userText),
                 projectId=currentConversation.projectId,temporary=currentConversation.temporary,
-                privacyRevision=ExecutionRunRepository.privacy(state,cid),createdAt=latestUser?.createdAt ?: now(),modelRoute=route,protocol=protocol,budget=RunBudget(maxModelSteps=TaskComplexity.modelSteps(userText)))
-        val admittedRecord=record.copy(modelRoute=route,protocol=protocol,archive=RunReplay.archive(record,route,protocol),budget=if(record.budget.exhausted && resumeId!=null && continuation==null)
-            record.budget.copy(maxModelSteps=record.budget.modelSteps+TaskComplexity.modelSteps(userText),maxOutputTokens=record.budget.outputTokens+131072) else record.budget)
+                privacyRevision=ExecutionRunRepository.privacy(state,cid),createdAt=latestUser?.createdAt ?: now(),modelRoute=route,protocol=protocol,budget=RunBudget(maxModelSteps=TaskComplexity.modelSteps(userText),inference=InferenceLedger.allowance(false,state.settings.creditAccount.runCreditLimit)))
+        val admittedRecord=record.copy(modelRoute=route,protocol=protocol,archive=RunReplay.archive(record,route,protocol),budget=if(resumeId!=null && continuation==null && (record.budget.exhausted || record.failure==FailureCode.BUDGET || answerOnly))
+            record.budget.extend(false,state.settings.creditAccount.runCreditLimit,answerOnly) else record.budget)
         suspend fun resolveKnownTool(account: String,id: String): ConnectionTool? {
             knownTools[toolKey(account,id)]?.let { return it }
             val ref=record.tools.lastOrNull { it.account==account && it.tool==id } ?: return null
@@ -692,7 +693,7 @@ class KaiViewModel(
         val inferenceRecovery=InferenceRecovery()
         val modelPolicy=ModelPolicy(creditOverview?.models.orEmpty().filter { it.available && (!state.settings.creditAccount.freeOnly || it.freeEligible) }
             .associateBy { it.id }.let { available -> state.settings.creditAccount.fallbackModels.mapNotNull { available[it] }.map { model ->
-                state.settings.creditAccount.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil).inference()
+                state.settings.creditAccount.copy(model=model.id,contextTokens=model.contextTokens,maxOutput=model.maxOutput,nativeTools=model.nativeTools,nativeQualificationId=model.nativeQualificationId,nativeQualifiedUntil=model.nativeQualifiedUntil,pricing=CreditPricing.from(model,model.priceObservedAt)).inference()
             } })
         // A restart between exact approval and dispatch resumes that same reviewed intent once.
         for(pending in store.state.value.tasks.filter { it.intent?.executionId==runtime.record.id && it.status==TaskStatus.READY && it.submittedAt==null }) {
@@ -752,21 +753,24 @@ class KaiViewModel(
                 }
                 if(web.exhausted || answerOnly) context.appendOutcome(if(answerOnly) "Answer now from retained observations only. No new tools, searches or writes are allowed. State evidence limits and unfinished work honestly." else web.budgetSummary)
                 val baseConfig = harness.config(responseRecovery.requestConfig(config), snapshot?.accounts.orEmpty().filter { it.active }.flatMap { account -> knownTools.values.filter { knownTools[toolKey(account.id,it.id)] == it }.map { account.id to it } },webAvailable=!web.exhausted)
-                val requestConfig=if(answerOnly) baseConfig.copy(tools=emptyList()) else baseConfig
+                val requestConfig=if(answerOnly) baseConfig.copy(tools=emptyList(),maxOutputTokens=minOf(baseConfig.maxOutputTokens,2048)) else baseConfig
                 context.progressContext=GoalProgress.render(store.state.value.tasks,runtime.record,runtime.record.tools)
                 val working = contextManager.prepare(context,requestConfig,
-                    summarize={ c,m -> inference.stream(c,m) {} },onChange={ change ->
+                    summarize={ c,m ->
+                        if(answerOnly) throw RunBudgetExceeded("Final answers use retained findings without another summary call.")
+                        runtime.infer(c,m,InferencePurpose.SUMMARY) { inference.stream(c,m) {} }
+                    },onChange={ change ->
                         ensureActiveTurn(epoch)
                         mutableUi.update { it.copy(streamingText="Optimizing context…") }
                         trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
                     })
-                val completion = try { inference.stream(requestConfig, working) { delta ->
+                val completion = try { runtime.infer(requestConfig,working,if(answerOnly) InferencePurpose.FINALIZATION else InferencePurpose.AGENT) { inference.stream(requestConfig, working) { delta ->
                     ensureActiveTurn(epoch)
                     partial.append(delta)
                     // Speech and format validation see every delta, including a token followed
                     // by a provider stall. Only display updates are coalesced during long replies.
                     publishPreview()
-                } } catch(error: com.kai.agent.inference.InferenceException) {
+                } } } catch(error: com.kai.agent.inference.InferenceException) {
                     if(speechDraft==null && contextManager.recover(error)) {
                         trace?.record("context_overflow_recovery")
                         mutableUi.update { it.copy(streamingText="Optimizing context…") }
@@ -786,7 +790,6 @@ class KaiViewModel(
                     throw error
                 }
                 contextManager.observe(completion)
-                completion.usage?.let { runtime.usage(it.inputTokens,it.outputTokens) }
                 publishPreview(forceDisplay = true)
                 ensureActiveTurn(epoch)
                 mutableUi.update { it.copy(providerConnected = true, providerStatus = completion.status(config)) }; accountRefresh()
@@ -972,7 +975,7 @@ class KaiViewModel(
                 }
             }
         }
-        if(runtime.record.state==ExecutionState.PARTIAL && runtime.record.failure==FailureCode.BUDGET) reply(cid,"I saved the progress for this request. Continue the run or ask for the findings collected so far.",epoch)
+        if(runtime.record.state==ExecutionState.PARTIAL && runtime.record.failure==FailureCode.BUDGET) reply(cid,runtime.record.detail+" Continue the run or ask for the findings collected so far.",epoch)
         } finally { runtime.release();if(activeChatExecutionId==runtime.record.id) activeChatExecutionId=null }
     }
 

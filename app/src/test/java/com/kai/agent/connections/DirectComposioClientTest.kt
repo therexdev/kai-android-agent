@@ -150,6 +150,20 @@ class DirectComposioClientTest {
         assertEquals(1, fake.executes)
     }
 
+    @Test fun schemaOptionalMailContentStillFailsBeforeApprovalOrDispatch() = runBlocking<Unit> {
+        val fake=Fake()
+        fake.tool.getJSONObject("input_parameters").getJSONObject("body").put("required",false)
+        val client=ready(fake);val tool=client.tool("GMAIL_SEND_EMAIL","latest")
+        val empty="""{"to":"recipient@example.test"}"""
+        expect<ConnectionServiceException> { client.approveAction("acct1",tool,empty) }
+        assertEquals(0,fake.executes)
+        val approved=client.approveAction("acct1",tool,ARGS)
+        expect<ConnectionServiceException> { client.execute("acct1",tool,empty,approved) }
+        assertEquals(0,fake.executes)
+        client.execute("acct1",tool,ARGS,approved)
+        assertEquals(1,fake.executes)
+    }
+
     @Test fun optionalCategoriesCannotBreakCatalogAndCustomOAuthDoesNotInventCredentials() = runBlocking<Unit> {
         val fake = Fake().apply { categoriesFail = true; existingConfig = false; managedSupported = false }
         val client = ready(fake)

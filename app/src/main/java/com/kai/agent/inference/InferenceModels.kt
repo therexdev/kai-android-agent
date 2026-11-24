@@ -20,6 +20,7 @@ data class ProviderConfig(
     val tools: List<InferenceTool> = emptyList(),
     val allowOutputGrowth: Boolean = true,
     val nativeQualificationId: String = "",
+    val creditPricing: com.kai.agent.runtime.CreditPricing? = null,
 ) {
     override fun toString() = "ProviderConfig(provider=$provider, modelId=$modelId, routing=$routing, apiKey=<redacted>)"
 }

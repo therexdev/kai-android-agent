@@ -381,6 +381,7 @@ class DirectComposioClient(
         val context = capture()
         requireActive(ownedAccount(context, accountId), tool)
         val args = ConnectionArguments.validate(argumentsJson, tool.schemaJson)
+        ActionInputRules.validate(tool,args)
         return ActionApproval(context.credentials.userId, context.generation, context.epoch, accountId, tool.id,
             tool.version, reviewDigest(args, tool), nowMillis() + 5 * 60_000L)
     }
@@ -391,6 +392,7 @@ class DirectComposioClient(
         val current = fetchTool(context, tool.id, tool.version)
         requireActive(verifyAccount(context, accountId), current)
         val args = ConnectionArguments.validate(argumentsJson, current.schemaJson)
+        ActionInputRules.validate(current,args)
         synchronized(lock) {
             ensureCurrent(context)
             if (approval.ownerId != context.credentials.userId || approval.generation != context.generation ||
