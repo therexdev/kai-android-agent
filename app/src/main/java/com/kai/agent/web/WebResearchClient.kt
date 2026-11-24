@@ -49,14 +49,17 @@ class WebResearchClient(private val transport: WebTransport = PublicWebTransport
     suspend fun read(url: String, smallContext: Boolean = false): JSONObject {
         val page = transport.get(PublicWebPolicy.url(url).toString(), emptyMap())
         val doc = Jsoup.parse(page.body, page.url)
+        val publishedEvidence=PublicPageEvidence.extract(doc)
         val links=doc.select("a[href]").mapNotNull { anchor ->
             val target=runCatching { PublicWebPolicy.url(anchor.absUrl("href")).toString() }.getOrNull() ?: return@mapNotNull null
             val label=anchor.text().trim().take(160)
             if(label.isBlank()) null else JSONObject().put("title",label).put("url",target)
         }.distinctBy { it.getString("url") }.take(if(smallContext) 16 else 40)
         doc.select("script,style,noscript,nav,header,footer,form,iframe,svg,template,[hidden],[aria-hidden=true]").remove()
-        val text = if(page.contentType.startsWith("text/plain")) page.body else
+        val body = if(page.contentType.startsWith("text/plain")) page.body else
             (doc.selectFirst("article") ?: doc.selectFirst("main") ?: doc.body()).text()
+        // Contact details are often in a footer; reserve space before long article text.
+        val text=if(publishedEvidence.isBlank()) body else publishedEvidence+"\nPage text:\n"+body
         if (text.isBlank()) throw WebResearchException("This page has no readable text. It may require sign-in or JavaScript.","EMPTY_EXTRACTION")
         val limit = if(smallContext) 1500 else 6000
         return JSONObject().put("kind", "page").put("status", "ok").put("url", page.url)

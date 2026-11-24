@@ -7,6 +7,8 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
     private data class Exchange(val assistant: String, val runtime: String, val compactRuntime: String, val wire: List<InferenceMessage>? = null)
     private val initialMessages = initial.toList()
     private var exchanges = emptyList<Exchange>()
+    var progressContext: String? = null
+    private fun progress() = progressContext?.let { listOf(InferenceMessage("user",it)) }.orEmpty()
 
     init {
         require(maxCharacters > 0)
@@ -63,7 +65,7 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
         }
     }
 
-    fun fullMessages(): List<InferenceMessage> = initialMessages+exchanges.flatMap { e ->
+    fun fullMessages(): List<InferenceMessage> = initialMessages+progress()+exchanges.flatMap { e ->
         e.wire ?: listOf(InferenceMessage("assistant",e.assistant),InferenceMessage("user",e.runtime))
     }
     fun priorResults(): List<InferenceMessage> = exchanges.flatMap { listOf(InferenceMessage("assistant",it.assistant),InferenceMessage("user",it.runtime)) }
@@ -143,7 +145,9 @@ class AgentTurnContext(initial: List<InferenceMessage>, private val maxCharacter
                     listOf(InferenceMessage("assistant",if(compactOld && e.assistant.length>1200) "Earlier proposal retained in task records." else e.assistant),InferenceMessage("user",runtime))
             }
         }
-        return initial+marker+results
+        val research=if(compactOld) ResearchEvidenceProjection.project(exchanges.mapIndexed { i,e -> "t_${i+1}" to e.runtime },if(level>=3) 1800 else 6500)
+            ?.let { listOf(InferenceMessage("user",it)) }.orEmpty() else emptyList()
+        return initial+progress()+marker+research+results
     }
 
     private fun size(items: List<Exchange>): Long = initialMessages.sumOf { it.content.length.toLong() } +

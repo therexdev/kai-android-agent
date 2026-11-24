@@ -5,24 +5,27 @@ import com.kai.agent.agent.ReplyOutcome
 
 /** Model outcome labels are proposals. Completion still requires host-owned effect evidence. */
 object GoalVerifier {
+    private fun unfinished(text: String)=Regex("(?i)\\b(?:can['’]t|cannot|unable to|couldn['’]t|haven['’]t|have not|not yet)\\b.{0,100}\\b(?:populate|fill|write|written|add|added|finish|complete|update|updated|send|sent)\\b").containsMatchIn(text)
     fun outcome(reply: AgentDecision.Reply, externalGoal: Boolean, hasAcceptedWrite: Boolean): ExecutionState = when(reply.outcome) {
         ReplyOutcome.QUESTION -> ExecutionState.WAITING_INPUT
         ReplyOutcome.BLOCKED, ReplyOutcome.PARTIAL -> ExecutionState.PARTIAL
         ReplyOutcome.ANSWER -> if(externalGoal && reply.text.trimEnd().endsWith("?")) ExecutionState.WAITING_INPUT
+            else if(externalGoal && unfinished(reply.text)) ExecutionState.PARTIAL
             else if(externalGoal && !hasAcceptedWrite) ExecutionState.PARTIAL else ExecutionState.COMPLETED
     }
-    fun acceptedEffect(tasks: List<com.kai.agent.data.AgentTask>, cid: String, since: Long, run: ExecutionRun): Boolean {
-        val accepted=tasks.filter { task ->
+    fun acceptedTasks(tasks: List<com.kai.agent.data.AgentTask>, cid: String, since: Long, run: ExecutionRun) = tasks.filter { task ->
             task.conversationId==cid && task.createdAt>=since && task.submittedAt!=null && task.intent?.readOnly!=true &&
                 (task.intent?.executionId==run.id || run.events.any { it.kind=="effect_recorded" && it.code==task.id }) &&
                 task.status in setOf(com.kai.agent.data.TaskStatus.ACCEPTED,com.kai.agent.data.TaskStatus.SUCCEEDED) &&
                 task.receipts.any { it.operationId==task.intent?.id && it.status in setOf("ACCEPTED","SUCCEEDED") }
         }
+    fun acceptedEffect(tasks: List<com.kai.agent.data.AgentTask>, cid: String, since: Long, run: ExecutionRun): Boolean {
+        val accepted=acceptedTasks(tasks,cid,since,run)
         val kinds=accepted.mapNotNull { it.intent?.let { intent -> intent.effectKind.ifBlank { EffectKinds.classify(intent.toolName) } } }.toSet()
-        return accepted.isNotEmpty() && run.goal.requiredEffects.all { it=="EXTERNAL" || it in kinds }
+        return accepted.isNotEmpty() && run.goal.requiredEffects.all { it=="EXTERNAL" || it in kinds } && SpreadsheetEvidence.complete(accepted,run.goal.request)
     }
     fun present(reply: AgentDecision.Reply, requiresEffect: Boolean, accepted: Boolean): String {
-        if(!requiresEffect || accepted || reply.text.trimEnd().endsWith("?")) return reply.text
+        if(!requiresEffect || accepted || unfinished(reply.text) || reply.text.trimEnd().endsWith("?")) return reply.text
         val claimed=reply.text.split(Regex("[.!\\n]")).any { sentence ->
             Regex("(?i)\\b(?:sent|emailed|created|updated|saved|published|posted|scheduled|booked|deleted|uploaded|submitted)\\b").containsMatchIn(sentence) &&
                 !Regex("(?i)\\b(?:not|no|haven't|have not|hasn't|couldn't|cannot|can't|unable|unconfirmed|unverified)\\b").containsMatchIn(sentence)

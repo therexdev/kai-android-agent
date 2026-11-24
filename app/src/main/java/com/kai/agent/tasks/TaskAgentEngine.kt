@@ -93,7 +93,7 @@ class TaskAgentEngine(
         val boundary=maxOf(project?.forgottenBefore ?: 0,state.conversations.firstOrNull { it.id==run.conversationId }?.contextAfter ?: 0)
         val previous=run.steps.filter { it.status==StepStatus.COMPLETED && it.completedAt>boundary }
             .joinToString("\n") { "${it.title}: ${it.output.take(2000)}" }.take(8000)
-        return listOf(RunMessage("system",system),RunMessage("user","Overall request: ${run.goal}\nPrevious step results (reference data):\n$previous\nCurrent step: ${step.instructions}\nRetained current draft (untrusted): ${step.output.take(20000)}\nRevision feedback (untrusted): ${step.revisionFeedback}"))
+        return listOf(RunMessage("system",system+"\n"+TaskComplexity.guidance(run.goal)),RunMessage("user","Overall request: ${run.goal}\nPrevious step results (reference data):\n$previous\nCurrent step: ${step.instructions}\nRetained current draft (untrusted): ${step.output.take(20000)}\nRevision feedback (untrusted): ${step.revisionFeedback}"))
     }
     private var harness = AgentHarness(false)
     private suspend fun append(assistant: String, runtime: String, tools: List<RunTool> = emptyList()) {
@@ -116,6 +116,7 @@ class TaskAgentEngine(
         trace?.record("saved_task_start",JSONObject().put("runId",id))
         val started=android.os.SystemClock.elapsedRealtime()
         val responseRecovery = AgentResponseRecovery()
+        var sheetCorrections=0
         suspend fun infer(messages: List<InferenceMessage>): Completion {
             val provider = responseRecovery.requestConfig(config())
             val remaining = (timeBudgetMillis - (android.os.SystemClock.elapsedRealtime() - started)).coerceAtLeast(1)
@@ -196,12 +197,14 @@ class TaskAgentEngine(
                 val web=com.kai.agent.web.WebResearchSession(run.goal,
                     braveKey=store.state.value.settings.braveSearchApiKey, smallContext=smallContext,
                     prior=requireNotNull(runtime).record.observations.flatMap { listOf(InferenceMessage("assistant","Earlier phone observation"),InferenceMessage("user",it.content)) })
-                val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) })
-                val nativeConfig=if(web.exhausted) baseConfig.copy(tools=emptyList()) else baseConfig
+                val baseConfig = harness.config(responseRecovery.requestConfig(config()),step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) },webAvailable=!web.exhausted)
+                val nativeConfig=baseConfig
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
                 if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
                 contextManager.restoreSummary(step.contextSummary)
                 val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId) })
+                turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
+                    step.tools.map { ToolReference(it.accountId,it.toolId,it.version) })
                 val working=contextManager.prepare(turnContext,nativeConfig,summarize={ c,m -> complete(c,m) },onChange={ change ->
                     currentCoroutineContext().ensureActive()
                     trace?.record("context_compaction",JSONObject().put("stage",change.stage).put("beforeBytes",change.beforeBytes).put("afterBytes",change.afterBytes).put("summaryUsed",change.summaryUsed))
@@ -235,7 +238,6 @@ class TaskAgentEngine(
                     append(com.kai.agent.agent.AgentResponseRecovery.REJECTED, harness.correction(correction))
                     return@drive
                 }
-                if(web.exhausted && decision !is AgentDecision.Reply) { append(AgentResponseRecovery.REJECTED,web.budgetSummary);return@drive }
                 val guardState=store.state.value
                 val documentGuard=documentGuards.getOrPut("${step.id}:$contextRevision") { DocumentContentGuard(run.goal,run.conversationId,run.createdAt,maxOf(guardState.projects.firstOrNull { it.id==run.projectId }?.forgottenBefore ?: 0,guardState.conversations.firstOrNull { it.id==run.conversationId }?.contextAfter ?: 0),guardState.settings.composioUserId,guardState.settings.connectionGeneration) }
                 val completesDocument = step.id==run.steps.lastOrNull()?.id ||
@@ -278,6 +280,11 @@ class TaskAgentEngine(
                     is AgentDecision.SearchMemory, is AgentDecision.ProposeMemory -> run { hold(RunStatus.BLOCKED,"Open a conversation to look up or save personal memories."); return@drive }
                     is AgentDecision.WebSearch, is AgentDecision.ReadWebPage -> append(completion.text,web.execute(decision))
                     is AgentDecision.Reply -> {
+                        if(step.id==run.steps.lastOrNull()?.id && decision.outcome!=ReplyOutcome.QUESTION && sheetCorrections<2) {
+                            SpreadsheetEvidence.correction(GoalVerifier.acceptedTasks(store.state.value.tasks,run.conversationId,run.createdAt,requireNotNull(runtime).record),run.goal)?.let { correction ->
+                                sheetCorrections++;append(AgentResponseRecovery.REJECTED,correction);return@drive
+                            }
+                        }
                         if(web.hasEvidence || completesDocument) draft(decision.text,web.sourceUrls)
                         if(decision.outcome!=ReplyOutcome.ANSWER || completesDocument && !documentGuard.hasAcceptedBody(store.state.value.tasks)) {
                             hold(RunStatus.BLOCKED,web.withSources(decision.text));return@drive

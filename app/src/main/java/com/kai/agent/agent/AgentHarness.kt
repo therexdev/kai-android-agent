@@ -17,10 +17,10 @@ class AgentHarness(val native: Boolean) {
     private var focusedAccount = ""
     private var focusedTool = ""
 
-    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>): ProviderConfig {
+    fun config(config: ProviderConfig, tools: List<Pair<String, ConnectionTool>>, webAvailable: Boolean = true): ProviderConfig {
         if (!native) return config
         bindings.clear()
-        val definitions = builtins().toMutableList()
+        val definitions = builtins().filterNot { !webAvailable && it.name in setOf("web_search","read_web_page") }.toMutableList()
         var bytes = definitions.sumOf { NativeToolWire.toolJson(it).toString().toByteArray().size }
         tools.distinctBy { it.first to it.second.id }.asReversed().sortedWith(
             compareByDescending<Pair<String,ConnectionTool>> { it.first==focusedAccount && it.second.id==focusedTool }

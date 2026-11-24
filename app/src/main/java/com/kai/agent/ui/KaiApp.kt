@@ -81,7 +81,6 @@ fun KaiApp(state: KaiUiState, actions: KaiUiActions) {
                         Text("kai",fontSize=28.sp,fontWeight=FontWeight.Bold,letterSpacing=(-1.6).sp)
                         Spacer(Modifier.width(9.dp))
                     }
-                    if(tab==KaiTab.TALK && state.currentConversationId!=null) TextButton(onClick={reportChat=state.currentConversationId}) { Text("Report") }
                     if(tab==KaiTab.TALK) IconButton(onClick={history=true},modifier=Modifier.size(42.dp)) {KaiIcon(KaiGlyph.MEMORY,label="Conversation history")}
                     TextButton(onClick={account=true;actions.accountRefresh()}) { Text("Account") }
                     IconButton(onClick={settings=true},modifier=Modifier.size(42.dp)) {KaiIcon(KaiGlyph.SETTINGS,label="Settings")}
@@ -128,7 +127,7 @@ fun KaiApp(state: KaiUiState, actions: KaiUiActions) {
         }
         if(account) ModalBottomSheet(onDismissRequest={account=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) { AccountContent(state,actions) { account=false } }
         if(settings) ModalBottomSheet(onDismissRequest={settings=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.background) {
-            SettingsContent(state,actions,onClose={settings=false},onVoice={settings=false;voiceOptions=true})
+            SettingsContent(state,actions,onClose={settings=false},onVoice={settings=false;voiceOptions=true},onReport={settings=false;reportChat=state.currentConversationId})
         }
         if(studio) ModalBottomSheet(onDismissRequest={studio=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.background) {
             CharacterStudio(state,actions,onClose={studio=false})

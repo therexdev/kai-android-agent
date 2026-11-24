@@ -42,6 +42,13 @@ class ExecutionRunRepository(private val store: KaiStore): RunRepository {
             val kept=next.executions.mapNotNull { r ->
                 if(next.conversations.none { it.id==r.conversationId }) return@mapNotNull null
                 val invalid=runCatching { privacy(next,r.conversationId)!=r.privacyRevision }.getOrDefault(true)
+                if(!invalid && r.origin==RunOrigin.CHAT && r.state==ExecutionState.COMPLETED && r.owner.isBlank() &&
+                    r.goal.requiresEffect && SpreadsheetEvidence.requiresContent(r.goal.request) &&
+                    !GoalVerifier.acceptedEffect(next.tasks,r.conversationId,r.createdAt,r)) {
+                    // Repair the old setup-only completion label. This admits no work or effect;
+                    // explicit Continue is still required, and the original receipts remain binding.
+                    return@mapNotNull r.copy(state=ExecutionState.PARTIAL,detail="The spreadsheet exists, but its requested contents are not confirmed. Continue the saved work.",revision=r.revision+1)
+                }
                 if(!invalid && r.state==ExecutionState.WAITING_APPROVAL && r.owner.isBlank()) {
                     val tasks=next.tasks.filter { it.conversationId==r.conversationId && it.instructions==r.goal.request && it.createdAt>=r.createdAt }
                     if(tasks.any { it.status==TaskStatus.READY && it.submittedAt==null }) return@mapNotNull r.copy(state=ExecutionState.PAUSED,detail="An approved action is ready. Continue to settle the same intent.",revision=r.revision+1)
