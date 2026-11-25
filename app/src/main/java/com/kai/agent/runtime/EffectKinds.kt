@@ -6,6 +6,7 @@ object EffectKinds {
     fun classify(id: String, toolkit: String = ""): String {
         val text=(toolkit+" "+id).uppercase()
         return when {
+            id in com.kai.agent.agent.DocumentResources.fileCreates -> "FILE"
             "GOOGLEDOCS" in text -> "DOCUMENT"
             ("GMAIL" in text || "OUTLOOK" in text || "EMAIL" in text) && Regex("SEND|FORWARD|REPLY").containsMatchIn(text) && "DRAFT" !in text -> "EMAIL"
             "CALENDAR" in text -> "CALENDAR"

@@ -31,7 +31,7 @@ class AgentHarness(val native: Boolean) {
             val key = "$account:${tool.id}:${tool.version}:${tool.schemaJson}"
             val hash = java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).take(10).joinToString("") { "%02x".format(it) }
             val name = "action_$hash"
-            val definition=InferenceTool(name,"${tool.name}: ${tool.description.take(300)}. Account: $account. ${if(tool.readOnly) "Read only." else "PREPARE this write for the phone approval card. Calling this function does not execute it; supply complete arguments now, without preliminary chat confirmation."}",tool.schemaJson)
+            val definition=InferenceTool(name,"${tool.name}: ${tool.description.take(300)}. Account: $account. ${if(tool.readOnly) "Read only." else "PREPARE this write for the phone approval card. Calling this function does not execute it; supply complete arguments now, without preliminary chat confirmation."}",com.kai.agent.connections.ActionInputRules.nativeSchema(tool))
             val size=NativeToolWire.toolJson(definition).toString().toByteArray().size
             if(bytes+size+1>budget) {
                 if(account==focusedAccount && tool.id==focusedTool)

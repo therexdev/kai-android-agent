@@ -4,6 +4,9 @@ import com.kai.agent.data.AgentTask
 import com.kai.agent.data.TaskStatus
 import org.commonmark.node.*
 import org.commonmark.parser.Parser
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.ext.gfm.tables.TableCell
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.Normalizer
 
@@ -13,7 +16,8 @@ import java.text.Normalizer
  */
 object DocumentVerification {
     enum class Status { UNVERIFIED, TEXT_MATCHED, TEXT_DIFFERS }
-    data class Evidence(val status: Status = Status.UNVERIFIED, val readTaskId: String = "", val observedAt: Long = 0) {
+    enum class ReadIssue { NONE, NO_SUPPORTED_READ, SCOPED_READ, INCOMPLETE_READ, UNSUPPORTED_FORMAT }
+    data class Evidence(val status: Status = Status.UNVERIFIED, val readTaskId: String = "", val observedAt: Long = 0, val readIssue: ReadIssue = ReadIssue.NO_SUPPORTED_READ) {
         val matched get() = status == Status.TEXT_MATCHED
     }
     private data class Body(val text: String, val markdown: Boolean, val whole: Boolean)
@@ -58,11 +62,11 @@ object DocumentVerification {
         val rr = read.receipts.lastOrNull { it.operationId == ri.id && it.status == "SUCCEEDED" && it.observedAt >= requireNotNull(read.submittedAt) }
         if (read.status != TaskStatus.SUCCEEDED || rr == null) return Evidence()
         val readArgs = parse(ri.argumentsJson) ?: return Evidence()
-        if (listOf("tab_ids", "tab_id", "range", "start_index", "end_index").any(readArgs::has)) return Evidence()
-        if (listOf("include_tabs_content", "include_headers", "include_footers", "include_footnotes").any { readArgs.opt(it) == true }) return Evidence()
+        if (listOf("tab_ids", "tab_id", "tabId", "range", "start_index", "end_index").any(readArgs::has)) return Evidence(readIssue=ReadIssue.SCOPED_READ)
+        if (listOf("include_headers", "include_footers", "include_footnotes").any { readArgs.opt(it) == true }) return Evidence(readIssue=ReadIssue.SCOPED_READ)
         val envelope = parse(read.resultContext) ?: return Evidence()
         if (envelope.optString("source") != "untrusted_connected_app_output" ||
-            envelope.optString("reportedStatus") != "SUCCEEDED" || envelope.opt("truncated") != false) return Evidence()
+            envelope.optString("reportedStatus") != "SUCCEEDED" || envelope.opt("truncated") != false) return Evidence(readIssue=ReadIssue.INCOMPLETE_READ)
         val data = when (val raw = envelope.opt("data")) {
             is String -> parse(raw)
             is JSONObject -> raw
@@ -70,14 +74,19 @@ object DocumentVerification {
         } ?: return Evidence()
         val document = document(data) ?: return Evidence()
         if (target(document) != target) return Evidence()
+        if(document.has("warnings") && (document.optJSONArray("warnings")?.length()!=0)) return Evidence(readIssue=ReadIssue.INCOMPLETE_READ)
         val actualText = when (ri.toolName) {
-            "GOOGLEDOCS_GET_DOCUMENT_PLAINTEXT" -> document.opt("plain_text") as? String
+            "GOOGLEDOCS_GET_DOCUMENT_PLAINTEXT" -> (document.opt("plain_text") as? String)?.takeUnless {
+                // Tab banners are presentation metadata. A structured read binds the body to
+                // its tab; do not guess which banner-like lines are authored content.
+                readArgs.optBoolean("include_tabs_content") && it.startsWith("--- TAB:")
+            }
             "GOOGLEDOCS_GET_DOCUMENT", "GOOGLEDOCS_GET_DOCUMENT_BY_ID" -> structuredText(document)
             else -> null
-        } ?: return Evidence()
+        } ?: return Evidence(readIssue=ReadIssue.UNSUPPORTED_FORMAT)
         val actual = normalize(actualText)
         val matches = if (body.whole) expected.matches(actual) else expected.containsMatchIn(actual)
-        return Evidence(if (matches) Status.TEXT_MATCHED else Status.TEXT_DIFFERS, read.id, rr.observedAt)
+        return Evidence(if (matches) Status.TEXT_MATCHED else Status.TEXT_DIFFERS, read.id, rr.observedAt,ReadIssue.NONE)
     }
 
     private fun body(tool: String, args: JSONObject): Body? {
@@ -100,7 +109,7 @@ object DocumentVerification {
     }
 
     private fun target(args: JSONObject): String? {
-        val ids = listOf("documentId", "document_id").mapNotNull { args.opt(it) as? String }.distinct()
+        val ids = listOf("documentId", "document_id", "id").mapNotNull { args.opt(it) as? String }.distinct()
         return ids.singleOrNull()?.takeIf(idPattern::matches)
     }
     private fun documentUrlId(url: String) = Regex("https://docs\\.google\\.com/document/d/([A-Za-z0-9_-]+)(?:[/?#].*)?").matchEntire(url)?.groupValues?.get(1).orEmpty()
@@ -117,16 +126,36 @@ object DocumentVerification {
         return children.singleOrNull()?.let { document(it, depth + 1) }
     }
     private fun structuredText(document: JSONObject): String? {
-        if (document.has("tabs")) return null // Tab scoping needs a separate adapter contract.
-        val content = document.optJSONObject("body")?.optJSONArray("content") ?: return null
-        val out = StringBuilder()
-        for (i in 0 until content.length()) {
-            val block = content.optJSONObject(i) ?: return null
-            if (block.has("sectionBreak")) continue
-            val elements = block.optJSONObject("paragraph")?.optJSONArray("elements") ?: return null
-            for (j in 0 until elements.length()) {
-                val element = elements.optJSONObject(j) ?: return null
-                out.append(element.optJSONObject("textRun")?.opt("content") as? String ?: return null)
+        val body=if(document.has("tabs")) {
+            val tabs=document.optJSONArray("tabs") ?: return null
+            if(tabs.length()!=1) return null
+            val tab=tabs.optJSONObject(0) ?: return null
+            if((tab.optJSONArray("childTabs")?.length() ?: 0)!=0) return null
+            tab.optJSONObject("documentTab")?.optJSONObject("body") ?: return null
+        } else document.optJSONObject("body") ?: return null
+        return contentText(body.optJSONArray("content") ?: return null)
+    }
+    private fun contentText(content: JSONArray, depth: Int = 0): String? {
+        if(depth>8) return null
+        val out=StringBuilder()
+        for(i in 0 until content.length()) {
+            val block=content.optJSONObject(i) ?: return null
+            when {
+                block.has("sectionBreak") -> Unit
+                block.has("paragraph") -> {
+                    val elements=block.getJSONObject("paragraph").optJSONArray("elements") ?: return null
+                    for(j in 0 until elements.length()) out.append(elements.optJSONObject(j)?.optJSONObject("textRun")?.opt("content") as? String ?: return null)
+                }
+                block.has("table") -> {
+                    val rows=block.getJSONObject("table").optJSONArray("tableRows") ?: return null
+                    for(r in 0 until rows.length()) {
+                        val cells=rows.optJSONObject(r)?.optJSONArray("tableCells") ?: return null
+                        for(c in 0 until cells.length()) {
+                            out.append(' ').append(contentText(cells.optJSONObject(c)?.optJSONArray("content") ?: return null,depth+1) ?: return null).append(' ')
+                        }
+                    }
+                }
+                else -> return null
             }
         }
         return out.toString()
@@ -137,21 +166,21 @@ object DocumentVerification {
         // not mutate approved arguments. Code/HTML/images are deliberately not verified as prose.
         if ('\uE000' in source || '\uE001' in source) return null
         val sourceText = if ('\n' !in source) source.replace("\\n", "\n") else source
-        if (Regex("(?m)^\\s*\\|.*\\|\\s*$").containsMatchIn(sourceText)) return null
-        val root = Parser.builder().build().parse(sourceText)
+        val root = Parser.builder().extensions(listOf(TablesExtension.create())).build().parse(sourceText)
         val out = StringBuilder(); var supported = true
         fun visit(node: Node) {
             when (node) {
                 is Text -> out.append(node.literal)
                 is SoftLineBreak, is HardLineBreak -> out.append(' ')
                 is ThematicBreak -> out.append(" \uE001 ")
-                is Code, is FencedCodeBlock, is IndentedCodeBlock, is HtmlBlock, is HtmlInline, is Image -> supported = false
+                is HtmlInline -> if(node.literal.matches(Regex("(?i)<br\\s*/?>"))) out.append(' ') else supported=false
+                is Code, is FencedCodeBlock, is IndentedCodeBlock, is HtmlBlock, is Image -> supported = false
                 else -> {
-                    if (node is Block) out.append(' ')
+                    if (node is Block || node is TableCell) out.append(' ')
                     if (node is ListItem) out.append('\uE000')
                     var child = node.firstChild
                     while (child != null) { visit(child); child = child.next }
-                    if (node is Block) out.append(' ')
+                    if (node is Block || node is TableCell) out.append(' ')
                 }
             }
         }

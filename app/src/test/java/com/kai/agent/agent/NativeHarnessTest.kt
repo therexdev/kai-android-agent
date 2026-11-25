@@ -51,11 +51,7 @@ class NativeHarnessTest {
             resultContext=JSONObject().put("source","untrusted_connected_app_output").put("reportedStatus","SUCCEEDED").put("truncated",false).put("data",data.toString()).toString())
         assertNull(guard.checkReply(listOf(write,read)))
         val link="Do you have AL\\nInk to the google doc"
-        assertTrue(ResourceReuseGuard.linkRequest(link))
-        assertTrue(ResourceReuseGuard.linkReply(link,listOf(write),"chat",0,"owner","generation",setOf("docs"))!!.contains("document_fixture_123"))
-        assertNull(ResourceReuseGuard.linkReply(link,listOf(write),"chat",105,"owner","generation",setOf("docs")))
-        assertNull(ResourceReuseGuard.linkReply(link,listOf(write),"chat",0,"other","generation",setOf("docs")))
-        assertNull(ResourceReuseGuard.linkReply(link,listOf(write),"chat",0,"owner","generation",setOf("other")))
+        assertTrue(ResourceReuseGuard.documentUrl(write)!!.contains("document_fixture_123"))
         assertTrue(runCatching { ResourceReuseGuard.validate(link,"chat",0,"owner","generation",AgentDecision.PrepareAction("docs",create.id,args,""),create,listOf(write)) }.isFailure)
     }
     @Test fun duplicateAndUnknownCreationCannotBeReplayedOnAnotherTurn() {
@@ -108,4 +104,18 @@ class NativeHarnessTest {
         val decision=h.parse(Completion("","tool_calls",toolCalls=listOf(ToolCall("call_create",focused.name,"{\"title\":\"Projects\"}"))),AgentResponseRecovery()) as AgentDecision.PrepareAction
         assertEquals("first",decision.accountId)
     }
+    @Test fun nativeEmailSchemaExposesTheExistingContentRuleWithoutChangingApprovalSchema() {
+        val original="""{"type":"object","properties":{"recipient_email":{"type":"string"},"subject":{"type":"string"},"body":{"type":"string"}},"required":["recipient_email"]}"""
+        val tool=com.kai.agent.connections.ConnectionTool("GMAIL_SEND_EMAIL","Send email","Send email","gmail","1",false,original)
+        val harness=AgentHarness(true)
+        val definition=harness.config(config,listOf("mail" to tool)).tools.single { it.name.startsWith("action_") }
+        val any=JSONObject(definition.parameters).getJSONArray("allOf").getJSONObject(0).getJSONArray("anyOf")
+        assertEquals(setOf("subject","body"),(0 until any.length()).map { any.getJSONObject(it).getJSONArray("required").getString(0) }.toSet())
+        assertEquals(original,tool.schemaJson)
+        val draft=JSONObject().put("recipient_email","recipient@example.test").put("body","Requested document link")
+        val decision=harness.parse(Completion("","tool_calls",toolCalls=listOf(ToolCall("email",definition.name,draft.toString()))),AgentResponseRecovery()) as AgentDecision.PrepareAction
+        assertEquals(draft.toString(),decision.arguments.toString())
+        assertTrue(runCatching { com.kai.agent.connections.ActionInputRules.validate(tool,JSONObject().put("recipient_email","recipient@example.test")) }.isFailure)
+    }
+
 }

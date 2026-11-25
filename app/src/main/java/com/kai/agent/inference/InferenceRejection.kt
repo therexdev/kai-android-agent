@@ -4,6 +4,12 @@ import org.json.JSONObject
 
 /** Fixed diagnostic vocabulary only: no provider text, prompts, paths or credentials reach the UI. */
 internal object InferenceRejection {
+    fun isModelUnavailable(body: String): Boolean {
+        val root=runCatching { JSONObject(body) }.getOrNull() ?: return false
+        val error=root.optJSONObject("error") ?: root
+        return error.optString("code") in setOf("managed_model_unavailable","model_not_found","model_unavailable") ||
+            "model is currently unavailable" in error.optString("message").lowercase()
+    }
     fun isContextOverflow(body: String): Boolean {
         val text=body.lowercase()
         return listOf("context_length_exceeded","context_window_exceeded","context_limit","maximum context length","context limit exceeded","prompt too large","too many tokens","128 kb","request entity too large").any { it in text }
@@ -23,6 +29,7 @@ internal object InferenceRejection {
             }
         }
         val reason = when {
+            isModelUnavailable(body) -> "The selected model is currently unavailable. Refresh the model list or choose another model. Progress is saved."
             code == "request_timeout" -> "The local model took longer than Remote Access allows. The request was not retried automatically."
             code == "memory_exhausted" || listOf("out of memory", "failed to allocate", "cannot allocate").any { it in text } ->
                 "The model could not allocate enough RAM or GPU memory. Close other model work or lower the allowed context in KAI Core."

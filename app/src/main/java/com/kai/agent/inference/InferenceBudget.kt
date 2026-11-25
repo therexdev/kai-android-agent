@@ -27,7 +27,7 @@ object InferenceBudget {
         if(estimate(selected) > target) for(index in compactOrder) {
             if(estimate(selected) <= target) break
             val item = selected[index]
-            item.compactContent?.takeIf { it.length < item.content.length }?.let { selected[index] = item.copy(content=it) }
+            item.compactContent?.takeIf { item.preparationSlot==null && it.length < item.content.length }?.let { selected[index] = item.copy(content=it) }
         }
         val remaining = window - 512 - estimate(selected) - schemaTokens
         if(remaining < 256) throw InferenceException((if(config.accountSession) "This request exceeds the selected model’s context limit. Choose a model with a larger context or shorten the request." else if (reportedWindow == null)

@@ -585,10 +585,6 @@ class KaiViewModel(
         if(continuation!=null && checkpointTask!=null && checkpointTask.createdAt<=forgottenBoundary) {
             reply(cid,"The action outcome remains in Tasks. Its original context was forgotten, so I haven't resumed the old request.",epoch);return
         }
-        if(continuation==null) com.kai.agent.agent.ResourceReuseGuard.linkReply(userText,state.tasks,cid,forgottenBoundary,state.settings.composioUserId,state.settings.connectionGeneration,snapshot?.accounts.orEmpty().filter { it.active }.map { it.id }.toSet())?.let {
-            reply(cid,it,epoch)
-            return
-        }
         val sourceMessages = store.messagesForContext(cid)
         val latestUserId = sourceMessages.lastOrNull { it.role == "user" }?.id
         val history = sourceMessages.filter { it.createdAt > forgottenBoundary || it.id == latestUserId }.map {
@@ -682,9 +678,9 @@ class KaiViewModel(
                 .map { ToolReference(account,it.id,it.version) } }
             runtime.checkpoint(context.archive(),GoalProgress.retainedTools(runtime.record.tools.filter { it.account in activeAccounts },loaded))
         }
-        suspend fun appendContext(assistant: String, runtime: String, compact: String = runtime) {
+        suspend fun appendContext(assistant: String, runtime: String, compact: String = runtime, preparationSlot: com.kai.agent.inference.PreparationSlot? = null) {
             trace?.record("runtime_result",JSONObject().put("modelProposal",assistant).put("result",runtime).put("compactResult",compact))
-            context.append(assistant,runtime,compact,if(harness.native) harness.exchange(assistant,runtime) else null)
+            context.append(assistant,runtime,compact,if(harness.native) harness.exchange(assistant,runtime) else null,preparationSlot)
             saveProgress()
         }
         val web = com.kai.agent.web.WebResearchSession(userText,
@@ -711,7 +707,19 @@ class KaiViewModel(
         }
         val responseRecovery = com.kai.agent.agent.AgentResponseRecovery()
         val toolRecovery = com.kai.agent.agent.AgentToolRecovery { harness.native }
-        runtime.drive {
+        runtime.drive(settlePending = {
+            if(record.budget.exhausted) {
+                ensureActiveTurn(epoch)
+                val latest=store.state.value
+                EvidenceFinalization.document(record,latest.tasks,latest.settings.composioUserId,latest.settings.connectionGeneration,forgottenBoundary)?.let { finalization ->
+                    documentVerification(finalization.verification)
+                    if(finalization.complete) {
+                        reply(cid,finalization.text,epoch)
+                        finish(ExecutionState.COMPLETED,"Document body verified; returned receipt without another model call.")
+                    } else finish(ExecutionState.PARTIAL,finalization.text,FailureCode.BUDGET)
+                }
+            }
+        }) {
             ensureActiveTurn(epoch)
             saveProgress()
             val partial = StringBuilder()
@@ -806,9 +814,9 @@ class KaiViewModel(
                 catch (error: com.kai.agent.agent.AgentResponseException) {
                     // Once speech began, a different response must not replace what the user heard.
                     trace?.error("proposal_rejected",error)
-                    val correction = if (speechDraft == null) responseRecovery.correction(error,harness.native) else null
+                    val correction = if (speechDraft == null) responseRecovery.correction(error,harness.native,completion.text) else null
                     if (correction == null) throw error
-                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, correction)
+                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, correction, preparationSlot=if(error.actionOutstanding) com.kai.agent.inference.PreparationSlot.DRAFT else com.kai.agent.inference.PreparationSlot.FEEDBACK)
                     mutableUi.update { it.copy(streamingText = "Rechecking the model response…") }
                     return@drive
                 }
@@ -854,7 +862,7 @@ class KaiViewModel(
                     ensureActiveTurn(epoch)
                     recovery.failure?.let { invalidateExpiredSession(it) }
                     recovery.tools.forEach { knownTools[toolKey(recovery.accountId, it.id)] = it }
-                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, recovery.payload.full, recovery.payload.compact)
+                    appendContext(com.kai.agent.agent.AgentResponseRecovery.REJECTED, recovery.payload.full, recovery.payload.compact,com.kai.agent.inference.PreparationSlot.FEEDBACK)
                     mutableUi.update { it.copy(streamingText = "Choosing an available action…") }
                     return@drive
                 }
@@ -950,7 +958,7 @@ class KaiViewModel(
                         EffectGuard.validate(store.state.value.tasks,cid,record.createdAt,decision.accountId,tool,decision.arguments)
                         DraftContent.extract(decision.arguments)?.let { runtime.draft(it,web.sourceUrls) }
                         val task = prepareAction(decision, tool, userText, cid, targetEvidence,runtime.record.id)
-                        if(!tool.readOnly) context.awaiting(completion)
+                        if(!tool.readOnly) { context.resolvePreparation(); context.awaiting(completion) }
                         if(!tool.readOnly) store.saveActionCheckpoint(task.id, context.checkpoint(), WorkspaceRules.contextRevision(state,currentConversation.projectId,cid),context.archive())
                         if (tool.readOnly) {
                             runtime.check()

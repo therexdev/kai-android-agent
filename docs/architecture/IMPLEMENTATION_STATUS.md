@@ -4,6 +4,14 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Follow-up and readback fixes (0.5.13)
+
+The all-chat report reproduced a follow-up intercepted before inference: a Sheets request containing “reference link” was answered with an old document URL. New messages now enter the ordinary agent path; receipt-based duplicate protection remains. Native Gmail definitions expose the existing nonempty-subject-or-body rule before proposal, while approval stays bound to the original discovered schema. Verification supports GFM tables and a complete single structured tab, and reports unsupported/truncated read shapes explicitly. Read-context projection retains recent pages and a bounded history of already-read offsets; archive indexes no longer list copies of retrieval results.
+
+This release reconstructs the unpublished 0.5.12 preparation feedback/draft persistence, recent-page retention, typed document resources, budget-boundary evidence finalization and model-unavailable handling from its retained APK. It is not a recovered byte-identical source commit. The source and validation record are now retained in this repository.
+
+Companion gateway helpers qualify all six managed routes individually, then activate explicitly selected passing routes with existing configuration, qualification and clean-shutdown checks. No live route has been newly qualified or enabled in this workspace. These changes advance KAI-005/006/014/015/034/036/039/041/048; wider live conformance and the continuous research → document → email → sheet → edit phone scenario remain acceptance checks. See `qa/0.5.13/VALIDATION.md`.
+
 ## Batch diagnostics (0.5.11)
 
 Settings/History Report now defaults to all saved regular chats, exported as one ZIP containing a JSON batch. Each chat retains the single-report contract; the index groups observed models, recording versions, run states, failure codes and trace gaps without treating runtime completion as independent proof of success. Trace retention supports 20 recently traced chats with bounded per-chat history. Temporary/privacy boundaries remain; old discarded details cannot be restored. This improves KAI-048 evaluation evidence and does not change the agent, solve the document/email behavior, or complete live conformance. See `docs/CHAT-REPORTS.md` and `qa/0.5.11/VALIDATION.md`.

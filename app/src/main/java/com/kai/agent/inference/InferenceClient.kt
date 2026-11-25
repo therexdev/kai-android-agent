@@ -479,6 +479,7 @@ class InferenceClient(client: OkHttpClient? = null,
                 else "The model reached its output limit without an answer. Progress is saved.",status,
                 failureCode=if(reasoning) com.kai.agent.runtime.FailureCode.REASONING_ONLY else com.kai.agent.runtime.FailureCode.OUTPUT_EXHAUSTED)
         }
+        if(InferenceRejection.isModelUnavailable(body)) return InferenceException(requireNotNull(InferenceRejection.describe(body,status)),status,failureCode=com.kai.agent.runtime.FailureCode.MODEL_UNAVAILABLE)
         val overflow=InferenceRejection.isContextOverflow(body) || status==413
         val message = InferenceRejection.describe(body, status) ?: if(overflow) "The inference request exceeds the model or gateway context limit." else return statusError(status ?: 400)
         return InferenceException(message,status,contextOverflow=overflow)

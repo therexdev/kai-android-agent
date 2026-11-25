@@ -8,6 +8,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class InferenceRejectionTest {
+    @Test fun explicitModelUnavailabilityHasItsOwnSafeCategory() {
+        val body="""{"error":{"code":"managed_model_unavailable","message":"private provider detail"}}"""
+        assertTrue(InferenceRejection.isModelUnavailable(body))
+        assertFalse(InferenceRejection.isModelUnavailable("""{"error":{"code":"invalid_argument","message":"private"}}"""))
+        val description=InferenceRejection.describe(body,400)!!
+        assertTrue(description.contains("currently unavailable"));assertFalse(description.contains("private"))
+        val current=ProviderConfig(ProviderId.KOINOS,"https://example.test","fixture","a")
+        assertEquals("b",com.kai.agent.runtime.ModelPolicy(listOf(current.copy(modelId="b"))).next(current,InferenceException(description,400,failureCode=com.kai.agent.runtime.FailureCode.MODEL_UNAVAILABLE))?.modelId)
+    }
+
     @Test fun knownAndLegacyRejectionsHaveSafeReasons() {
         val cases = listOf(
             """{"error":{"type":"remote_access_error","source":"local_model","code":"memory_exhausted","message":"secret /private/path"}}""" to "RAM or GPU memory",

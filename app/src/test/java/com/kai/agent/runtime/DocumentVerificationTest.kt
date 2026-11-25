@@ -106,7 +106,7 @@ class DocumentVerificationTest {
         for(raw in listOf("{broken",envelope.put("truncated",true).toString(),"""{"data":{"plain_text":"$plain"}}"""))
             assertEquals(DocumentVerification.Status.UNVERIFIED,check(r=r.copy(resultContext=raw)).status)
         assertFalse(check(r=r.copy(intent=r.intent!!.copy(argumentsJson="""{"document_id":"doc-real","tab_ids":["tab"]}"""))).matched)
-        for (flag in listOf("include_tabs_content","include_headers","include_footers","include_footnotes"))
+        for (flag in listOf("include_headers","include_footers","include_footnotes"))
             assertFalse(check(r=r.copy(intent=r.intent!!.copy(argumentsJson=JSONObject().put("document_id","doc-real").put(flag,true).toString()))).matched)
     }
     @Test fun newestReadSupersedesAnEarlierMatchIncludingFailureAndTruncation() {
@@ -118,7 +118,7 @@ class DocumentVerificationTest {
     }
     @Test fun unsupportedToolsTabsImagesHtmlAndCodeNeverGetGenericStringMatching() {
         assertFalse(check(w=write(tool="GOOGLEDOCS_UPDATE_HEADER")).matched)
-        for(text in listOf("![image](https://example.com/a.png)","<b>text</b>","`text`","| a | b |\n|---|---|\n| c | d |"))
+        for(text in listOf("![image](https://example.com/a.png)","<b>text</b>","`text`"))
             assertEquals(DocumentVerification.Status.UNVERIFIED,check(write(text),read(text)).status)
     }
     @Test fun singleBatchBodyInsertionIsSupportedButFooterAndMultipleRequestsAreNot() {
@@ -169,4 +169,50 @@ class DocumentVerificationTest {
         val forgotten=restored.tasks.map { it.copy(resultContext="") }
         assertFalse(DocumentVerification.evaluate(forgotten.first(),forgotten).matched)
     }
+    @Test fun tableCellsAndInlineBreaksMatchCompleteVisibleText() {
+        val source="# Directory\n\n| Name | Details |\n|---|---|\n| Alpha | First<br>Second |\n| Beta | Third |"
+        val actual="Directory\nName\tDetails\nAlpha\tFirst\nSecond\nBeta\tThird\n"
+        assertTrue(check(write(source),read(actual)).matched)
+        assertFalse(check(write(source),read(actual.replace("Third","Changed"))).matched)
+        assertFalse(check(write(source),read(actual.substringBefore("Beta"))).matched)
+    }
+    @Test fun structuredSingleTabAndByIdAliasAreSupportedWithoutStrippingText() {
+        val doc=JSONObject("""{"documentId":"doc-real","tabs":[{"tabProperties":{"tabId":"t.0"},"documentTab":{"body":{"content":[{"paragraph":{"elements":[{"textRun":{"content":"Literal body.\n"}}]}}]}}}]}""")
+        val r=read().let { it.copy(intent=it.intent!!.copy(toolName="GOOGLEDOCS_GET_DOCUMENT_BY_ID",argumentsJson="""{"id":"doc-real","includeTabsContent":true}"""),resultContext=context(doc)) }
+        assertTrue(check(write("Literal body.","GOOGLEDOCS_CREATE_DOCUMENT","text"),r).matched)
+        doc.getJSONArray("tabs").put(doc.getJSONArray("tabs").getJSONObject(0))
+        assertEquals(DocumentVerification.ReadIssue.UNSUPPORTED_FORMAT,check(write(),r.copy(resultContext=context(doc))).readIssue)
+    }
+    @Test fun tabBannersAndWarningsRequestACompleteSupportedReadInsteadOfGuessing() {
+        val r=read("--- TAB: Tab 1 (t.0) ---\n"+plain).let { it.copy(intent=it.intent!!.copy(argumentsJson="""{"document_id":"doc-real","include_tabs_content":true}""")) }
+        assertEquals(DocumentVerification.ReadIssue.UNSUPPORTED_FORMAT,check(r=r).readIssue)
+        val warned=JSONObject().put("document_id","doc-real").put("plain_text",plain).put("warnings",org.json.JSONArray().put("Some content was skipped"))
+        assertEquals(DocumentVerification.ReadIssue.INCOMPLETE_READ,check(r=read().copy(resultContext=context(warned))).readIssue)
+    }
+
+    @Test fun budgetFinalizationUsesEvidenceAndNeverCompletesPendingOrRemainingWork() {
+        val w=write();val r=read()
+        val run=ExecutionRun("run","chat","message",RunOrigin.CHAT,GoalContract(w.instructions,"document"),privacyRevision=1,createdAt=100)
+        val done=EvidenceFinalization.document(run,listOf(w,r),"owner","generation",0)!!
+        assertTrue(done.complete);assertTrue(done.text.contains("https://docs.google.com/document/"))
+        assertFalse(EvidenceFinalization.document(run,listOf(w),"owner","generation",0)!!.complete)
+        assertNull(EvidenceFinalization.document(run,listOf(w,r),"different","generation",0))
+        assertNull(EvidenceFinalization.document(run,listOf(w,r),"owner","generation",101))
+        val withEmail=run.copy(goal=GoalContract.infer("Research projects, create a document, and email it"))
+        assertFalse(EvidenceFinalization.document(withEmail,listOf(w,r),"owner","generation",0)!!.complete)
+        val uncertain=w.copy(id="uncertain",status=TaskStatus.UNKNOWN)
+        assertFalse(EvidenceFinalization.document(run,listOf(w,r,uncertain),"owner","generation",0)!!.complete)
+    }
+
+    @Test fun structuredTableUsesOrderedCellBodyTextAndRejectsMissingCells() {
+        fun cell(text: String)=JSONObject().put("content",org.json.JSONArray().put(JSONObject().put("paragraph",JSONObject().put("elements",org.json.JSONArray().put(JSONObject().put("textRun",JSONObject().put("content",text+"\n")))))))
+        val cells=org.json.JSONArray().put(cell("Alpha")).put(cell("Description"))
+        val doc=JSONObject().put("documentId","doc-real").put("body",JSONObject().put("content",org.json.JSONArray().put(JSONObject().put("table",JSONObject().put("tableRows",org.json.JSONArray().put(JSONObject().put("tableCells",cells)))))))
+        val r=read().let { it.copy(intent=it.intent!!.copy(toolName="GOOGLEDOCS_GET_DOCUMENT"),resultContext=context(doc)) }
+        val w=write("Alpha Description","GOOGLEDOCS_CREATE_DOCUMENT","text")
+        assertTrue(check(w,r).matched)
+        cells.remove(1)
+        assertFalse(check(w,r.copy(resultContext=context(doc))).matched)
+    }
+
 }

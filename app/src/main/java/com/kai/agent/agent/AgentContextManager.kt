@@ -37,7 +37,7 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
         summarize: suspend (ProviderConfig,List<InferenceMessage>)->Completion,
         onChange: suspend (Change)->Unit = {}): Request {
         var selected=configure(24_000)
-        val protected=context.project(3)
+        val protected=context.project(3,retainReadPages=false)
         val protectedBytes=messageBytes(protected)
         val schemas=toolBytes(selected)
         onChange(Change("request_components",payloadLimit(selected),protectedBytes+schemas+(if(schemas>0) 64 else 0),false,
@@ -107,7 +107,8 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
         // Do not pay for a summary that cannot replace these records or authorize an action.
         if(context.progressContext!=null) {
             selected=context.project(maxOf(2,minimumLevel))
-            if(!fits(selected)) { selected=context.project(3);minimumLevel=3 }
+            if(!fits(selected)) { selected=context.project(3);minimumLevel=3
+                if(!fits(selected,shortOutput=true)) selected=context.project(3,retainReadPages=false) }
             if(fits(selected,shortOutput=true)) {
                 minimumLevel=maxOf(2,minimumLevel)
                 lastEstimate=InferenceBudget.estimate(selected)
@@ -138,6 +139,7 @@ class AgentContextManager(private val summaryTimeoutMillis: Long = 15_000) {
         context.summary=summary;context.summaryThrough=summarizedThrough
         selected=context.project(maxOf(2,minimumLevel))
         if(!fits(selected)) selected=context.project(3)
+        if(!fits(selected,shortOutput=true)) selected=context.project(3,retainReadPages=false)
         if(!fits(selected,shortOutput=true)) throw InferenceException("The current request, required instructions or latest tool exchange exceeds this model or gateway's limit after context optimization. Choose a larger-context model or narrow the current request. Task records and submitted-action receipts are retained.")
         lastEstimate=InferenceBudget.estimate(selected)
         NativeToolWire.validate(selected,config.nativeTools)

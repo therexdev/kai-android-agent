@@ -1,6 +1,8 @@
 package com.kai.agent.inference
 
 enum class ProviderId { KOINOS, OPENAI }
+enum class PreparationSlot { FEEDBACK, DRAFT }
+
 enum class RoutingMode { LOCAL_ONLY, LOCAL_FIRST, NETWORK_ONLY }
 
 /** A user's credential. Never include its value in diagnostics or generated prompts. */
@@ -28,7 +30,7 @@ data class ProviderConfig(
 data class ToolCall(val id: String, val name: String, val arguments: String)
 data class InferenceTool(val name: String, val description: String, val parameters: String)
 data class InferenceMessage(val role: String, val content: String, val images: List<String> = emptyList(), val canOmit: Boolean = false, val compactContent: String? = null,
-    val toolCalls: List<ToolCall> = emptyList(), val toolCallId: String = "", val providerReplay: ProviderReplay? = null)
+    val toolCalls: List<ToolCall> = emptyList(), val toolCallId: String = "", val providerReplay: ProviderReplay? = null, val preparationSlot: PreparationSlot? = null)
 data class InferenceModel(val id: String, val displayName: String = id, val contextTokens: Int? = null, val automaticContext: Boolean = false) {
     fun contextStatus(): String = when {
         contextTokens == null -> "Context limit not reported; using a conservative 4,096-token budget."

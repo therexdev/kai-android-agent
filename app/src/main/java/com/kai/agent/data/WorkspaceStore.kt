@@ -89,7 +89,7 @@ suspend fun KaiStore.prepareRunAction(runId: String, lease: String, intent: Acti
     var task=AgentTask(title=title,instructions=run.goal,intent=intent,status=TaskStatus.AWAITING_APPROVAL,
         conversationId=run.conversationId,runId=runId,events=listOf(TaskEvent(status=TaskStatus.AWAITING_APPROVAL,detail="Prepared exact action")))
     if(readOnly) task=TaskRules.approve(task,state.settings)
-    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages+RunMessage("assistant",assistantJson,toolCalls=nativeCalls,providerReplay=nativeReplay))
+    val updatedStep=step.copy(pendingActionId=task.id,messages=step.messages.map { it.copy(preparationSlot=null) }+RunMessage("assistant",assistantJson,toolCalls=nativeCalls,providerReplay=nativeReplay))
     val updatedRun=run.copy(steps=run.steps.map { if(it.id==step.id) updatedStep else it },updatedAt=now())
     withRun(state.copy(tasks=state.tasks+task),updatedRun) to task
 }

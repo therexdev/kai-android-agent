@@ -12,7 +12,7 @@ object NativeToolWire {
         if (message.toolCallId.isNotBlank()) put("tool_call_id", message.toolCallId)
         message.providerReplay?.let { put("kai_replay",it.token) }
     }
-    fun persistedMessageJson(message: InferenceMessage) = messageJson(message).apply { message.providerReplay?.let { put("kai_replay_route",it.route) } }
+    fun persistedMessageJson(message: InferenceMessage) = messageJson(message).apply { message.providerReplay?.let { put("kai_replay_route",it.route) }; message.preparationSlot?.let { put("preparationSlot",it.name) } }
     fun toolJson(tool: InferenceTool) = JSONObject().put("type", "function").put("function",
         JSONObject().put("name",tool.name).put("description",tool.description).put("parameters",JSONObject(tool.parameters)))
     class Accumulator {
