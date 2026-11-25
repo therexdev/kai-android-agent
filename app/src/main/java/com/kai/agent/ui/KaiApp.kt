@@ -56,7 +56,7 @@ fun KaiApp(state: KaiUiState, actions: KaiUiActions) {
     var studio by rememberSaveable { mutableStateOf(false) }
     var voiceOptions by rememberSaveable { mutableStateOf(false) }
     var chat by rememberSaveable { mutableStateOf(false) }
-    var reportChat by rememberSaveable { mutableStateOf<String?>(null) }
+    var reportOpen by rememberSaveable { mutableStateOf(false) }
     var history by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.incomingDraftText) { if(state.incomingDraftText!=null) { tab=KaiTab.TALK;chat=true } }
     LaunchedEffect(state.requestedRunId) { if(state.requestedRunId!=null)tab=KaiTab.TASKS }
@@ -127,13 +127,14 @@ fun KaiApp(state: KaiUiState, actions: KaiUiActions) {
         }
         if(account) ModalBottomSheet(onDismissRequest={account=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) { AccountContent(state,actions) { account=false } }
         if(settings) ModalBottomSheet(onDismissRequest={settings=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.background) {
-            SettingsContent(state,actions,onClose={settings=false},onVoice={settings=false;voiceOptions=true},onReport={settings=false;reportChat=state.currentConversationId})
+            SettingsContent(state,actions,onClose={settings=false},onVoice={settings=false;voiceOptions=true},onReport={settings=false;reportOpen=true})
         }
         if(studio) ModalBottomSheet(onDismissRequest={studio=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.background) {
             CharacterStudio(state,actions,onClose={studio=false})
         }
         if(voiceOptions) ModalBottomSheet(onDismissRequest={voiceOptions=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)) { VoiceControls(state,actions) { voiceOptions=false } }
-        if(reportChat!=null) ChatReportDialog(reportChat!!,actions,onClose={reportChat=null})
+        if(reportOpen) ChatReportDialog(state.currentConversationId?.takeIf { id -> state.conversations.any { it.id == id && !it.temporary } },actions,
+            allChatCount=state.conversations.count { !it.temporary },onClose={reportOpen=false})
         if(history) ModalBottomSheet(onDismissRequest={history=false},sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=MaterialTheme.colorScheme.background) {
             HistoryContent(state,actions,onClose={history=false;chat=true})
         }

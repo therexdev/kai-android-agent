@@ -1,0 +1,4 @@
+List of devices attached
+
+
+Instrumentation execution: 0 tests. No device or emulator attached.

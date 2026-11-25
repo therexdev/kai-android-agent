@@ -68,10 +68,50 @@ class ChatDiagnosticsDeviceTest {
         val app=App(InstrumentationRegistry.getInstrumentation().targetContext); val store=KaiStore(app)
         try {
             store.load(); val chat=store.createConversation(); val trace=requireNotNull(store.beginChatTrace(chat.id,"fixture"))
-            repeat(14) { trace.record("large",JSONObject().put("index",it).put("text","x ".repeat(50000))) }
+            repeat(44) { trace.record("large",JSONObject().put("index",it).put("text","x ".repeat(50000))) }
             val report=JSONObject(store.exportChatReport(chat.id)); val events=report.getJSONArray("trace")
-            assertTrue(events.length() in 1..9); assertEquals(14-events.length(),report.getJSONObject("coverage").getInt("droppedEvents"))
-            assertEquals(13,events.getJSONObject(events.length()-1).getJSONObject("data").getInt("index"))
+            assertTrue(events.length() in 1..39); assertEquals(44-events.length(),report.getJSONObject("coverage").getInt("droppedEvents"))
+            assertEquals(43,events.getJSONObject(events.length()-1).getJSONObject("data").getInt("index"))
         } finally { store.close(); app.directory.deleteRecursively() }
     }
+    @Test fun twentyChatsSurviveRestartAndBatchExportHonorsDeletionAndTemporaryPrivacy() = runBlocking {
+        val app=App(InstrumentationRegistry.getInstrumentation().targetContext); var store=KaiStore(app)
+        try {
+            store.load(); store.updateSettings { it.copy(composioApiKey="batch-secret") }
+            val chats=(0 until 20).map { index ->
+                val chat=store.createConversation(); store.appendMessage(chat.id,"user","attempt-$index")
+                val trace=requireNotNull(store.beginChatTrace(chat.id,"fixture"))
+                repeat(14) { trace.record("fixture",JSONObject().put("index",it).put("text","x ".repeat(50000)).put("api_key","batch-secret")) }
+                chat
+            }
+            val temporary=store.createConversation(temporary=true); store.appendMessage(temporary.id,"user","temporary-marker")
+            store.close(); store=KaiStore(app); store.load()
+            val output=java.io.StringWriter(); store.writeAllChatReports(output)
+            val batch=JSONObject(output.toString())
+            assertEquals(20,batch.getInt("chatCount")); assertEquals(280,batch.getJSONObject("summary").getInt("eventCount"))
+            assertEquals(0,batch.getJSONObject("summary").getInt("droppedEvents"))
+            assertFalse(output.toString().contains("batch-secret")); assertFalse(output.toString().contains("temporary-marker"))
+            assertTrue(runCatching { store.importJson(output.toString()) }.isFailure)
+            val next=store.createConversation(); requireNotNull(store.beginChatTrace(next.id,"fixture")).record("new")
+            val overflow=java.io.StringWriter(); store.writeAllChatReports(overflow)
+            assertEquals(14,JSONObject(overflow.toString()).getJSONObject("summary").getInt("droppedEvents"))
+            store.deleteConversation(chats.first().id)
+            val after=java.io.StringWriter(); store.writeAllChatReports(after)
+            assertFalse(after.toString().contains(chats.first().id))
+            assertEquals(0,JSONObject(after.toString()).getJSONObject("summary").getInt("eventCount"))
+        } finally { store.close(); app.directory.deleteRecursively() }
+    }
+    @Test fun pendingBatchExportSurvivesRecreationAndIsConsumedOnce() {
+        androidx.test.core.app.ActivityScenario.launch(com.kai.agent.MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                androidx.lifecycle.ViewModelProvider(activity)[com.kai.agent.KaiViewModel::class.java].stageAllChatReportExport()
+            }
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                val model=androidx.lifecycle.ViewModelProvider(activity)[com.kai.agent.KaiViewModel::class.java]
+                assertTrue(model.consumeAllChatReportExport()); assertFalse(model.consumeAllChatReportExport())
+            }
+        }
+    }
+
 }

@@ -240,6 +240,7 @@ class KaiViewModel(
     sealed interface AppEvent {
         data class OpenUrl(val url: String) : AppEvent
         data object RequestMicrophone : AppEvent
+        data object ExportAllChatReports : AppEvent
         data class ExportJson(val text: String, val fileName: String = "KAI-backup.json") : AppEvent
         data object ImportJson : AppEvent
         data object RequestNotifications : AppEvent
@@ -378,7 +379,7 @@ class KaiViewModel(
             selectedVoiceBaseId = character.deviceVoiceBaseId,
             characters = builtInKaiCharacters.map { uiCharacter -> uiCharacter.copy(voiceId = state.characters.firstOrNull { it.id == uiCharacter.id }?.voiceId.orEmpty().ifBlank { "system" }) },
             messages = conversation?.messages.orEmpty().filter { it.role in setOf("user", "assistant") && it.text.isNotBlank() }.map { KaiMessage(it.id, if (it.role == "user") KaiRole.USER else KaiRole.ASSISTANT, it.text) },
-            conversations = state.conversations.sortedByDescending { it.updatedAt }.map { KaiConversation(it.id, it.title, "${it.messages.size} messages") },
+            conversations = state.conversations.sortedByDescending { it.updatedAt }.map { KaiConversation(it.id, it.title, "${it.messages.size} messages", it.temporary) },
             currentConversationId = conversationId,
             providerConfig = state.settings.toUiConfig(),
             account = ui.value.account.copy(signedIn=state.settings.creditAccount.token.isNotBlank(),email=state.settings.creditAccount.email,
@@ -1648,6 +1649,11 @@ class KaiViewModel(
     private var pendingExportText: String? = null
     fun stageExport(text: String) { pendingExportText=text }
     fun consumeExport(): String? = pendingExportText.also { pendingExportText=null }
+    private var pendingAllChatReport = false
+    fun stageAllChatReportExport() { pendingAllChatReport = true }
+    fun consumeAllChatReportExport(): Boolean = pendingAllChatReport.also { pendingAllChatReport = false }
+    suspend fun writeAllChatReports(output: java.io.OutputStream) = store.writeAllChatReportsArchive(output)
+    override fun exportAllChatReports() { safely { eventsChannel.send(AppEvent.ExportAllChatReports) } }
     override fun exportChatReport(id: String) { safely {
         eventsChannel.send(AppEvent.ExportJson(store.exportChatReport(id),"kai-chat-report-${java.time.LocalDate.now()}-${id.take(8)}.json"))
     } }

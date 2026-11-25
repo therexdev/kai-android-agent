@@ -210,21 +210,34 @@ internal fun HistoryContent(state:KaiUiState,actions:KaiUiActions,onClose:()->Un
             if(state.conversations.isEmpty()) item {EmptyState(KaiGlyph.TALK,"Room for a new thought.","Your conversations will appear here as you talk with KAI.")}
             items(state.conversations,key={it.id}){conversation->
                 Surface(onClick={actions.selectConversation(conversation.id);onClose()},shape=RoundedCornerShape(16.dp),color=if(conversation.id==state.currentConversationId) MaterialTheme.colorScheme.primaryContainer.copy(alpha=.5f) else MaterialTheme.colorScheme.surfaceContainer) {
-                    Row(Modifier.padding(start=16.dp,top=10.dp,bottom=10.dp,end=5.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text(conversation.title,style=MaterialTheme.typography.titleMedium,maxLines=2,overflow=TextOverflow.Ellipsis);if(conversation.detail.isNotBlank()) Text(conversation.detail,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)};TextButton(onClick={reporting=conversation.id}){Text("Report")};IconButton(onClick={deleting=conversation}){KaiIcon(KaiGlyph.DELETE,Modifier.size(17.dp),MaterialTheme.colorScheme.onSurfaceVariant,label="Delete conversation")}}
+                    Row(Modifier.padding(start=16.dp,top=10.dp,bottom=10.dp,end=5.dp),verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text(conversation.title,style=MaterialTheme.typography.titleMedium,maxLines=2,overflow=TextOverflow.Ellipsis);if(conversation.detail.isNotBlank()) Text(conversation.detail,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)};TextButton(onClick={reporting=conversation.id},enabled=!conversation.temporary){Text("Report")};IconButton(onClick={deleting=conversation}){KaiIcon(KaiGlyph.DELETE,Modifier.size(17.dp),MaterialTheme.colorScheme.onSurfaceVariant,label="Delete conversation")}}
                 }
             }
         }
     }
-    if(reporting!=null) ChatReportDialog(reporting!!,actions,onClose={reporting=null})
+    if(reporting!=null) ChatReportDialog(reporting!!,actions,allChatCount=state.conversations.count { !it.temporary },onClose={reporting=null})
     if(deleting!=null) AlertDialog(onDismissRequest={deleting=null},title={Text("Delete this conversation?")},text={Text("Messages and memories saved from this conversation will be removed from this device.")},confirmButton={TextButton(onClick={actions.deleteConversation(deleting!!.id);deleting=null}){Text("Delete",color=MaterialTheme.colorScheme.error)}},dismissButton={TextButton(onClick={deleting=null}){Text("Cancel")}})
 }
 
 
 @Composable
-internal fun ChatReportDialog(id: String, actions: KaiUiActions, onClose: () -> Unit) {
+internal fun ChatReportDialog(id: String?, actions: KaiUiActions, allChatCount: Int, onClose: () -> Unit) {
+    var allChats by rememberSaveable { mutableStateOf(true) }
     AlertDialog(onDismissRequest=onClose,title={Text("Save chat report")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text("Regular chats automatically keep an encrypted diagnostic record on this phone. Save a JSON file and attach it when asking for help.")
-        Text("Includes your messages, model context and responses, tool choices, approvals, results and errors. Credentials are filtered, but personal content remains. Review the file before sharing.")
-        Text("Records start with this update. Older steps, audio and attachment bytes are unavailable. Storage limits can remove older records; forgetting data clears diagnostics. Temporary chats are not recorded.",style=MaterialTheme.typography.bodySmall)
-    }},confirmButton={TextButton(onClick={actions.exportChatReport(id);onClose()}){Text("Save report")}},dismissButton={TextButton(onClick=onClose){Text("Cancel")}})
+        Text("Save one report to compare attempts across your chats. Choose what to include:")
+        Row(Modifier.fillMaxWidth().clickable { allChats=true },verticalAlignment=Alignment.CenterVertically) {
+            RadioButton(selected=allChats,onClick={allChats=true})
+            Text("All saved chats ($allChatCount)")
+        }
+        if(id!=null) Row(Modifier.fillMaxWidth().clickable { allChats=false },verticalAlignment=Alignment.CenterVertically) {
+            RadioButton(selected=!allChats,onClick={allChats=false})
+            Text("This chat only")
+        }
+        Text("Includes messages, model context and responses, tool choices, approvals, results and errors for the selected chats. Credentials are filtered, but personal content remains. Nothing is uploaded automatically.")
+        Text(if(allChats) "Saves one ZIP containing the JSON report. Attach the ZIP for review." else "Saves one JSON report.",style=MaterialTheme.typography.bodySmall)
+        Text("Detailed records are retained for the 20 most recently active chats, with a limit per chat. Older chats remain in the report with any missing records marked. Previously discarded details cannot be recovered. Forgetting data clears diagnostics. Temporary chats are excluded.",style=MaterialTheme.typography.bodySmall)
+    }},confirmButton={TextButton(enabled=if(allChats) allChatCount>0 else id!=null,onClick={
+        if(allChats) actions.exportAllChatReports() else id?.let(actions::exportChatReport)
+        onClose()
+    }){Text("Save report")}},dismissButton={TextButton(onClick=onClose){Text("Cancel")}})
 }

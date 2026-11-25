@@ -68,7 +68,7 @@ class DiagnosticRedactor(settings: AppSettings) {
         if(safe.length <= MAX_EVENT_CHARS) return safe
         return JSONObject().put("truncated", true).put("originalSanitizedCharacters", safe.length)
             .put("preview", safe.take(64_000)).put("tail", safe.takeLast(10_000)).also { bounded ->
-                listOf("sessionId","userMessageId","at","timeUtc","event","purpose").forEach { key ->
+                listOf("sessionId","userMessageId","at","timeUtc","event","purpose","recordedAppVersion","recordedAppVersionCode").forEach { key ->
                     if(sanitized.has(key)) bounded.put(key,sanitized.opt(key))
                 }
             }.toString()

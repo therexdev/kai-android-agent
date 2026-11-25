@@ -4,6 +4,10 @@ Review date: 2026-11-23. Target alpha: 0.5.0 (40). Baseline Android commit: `4f3
 
 This is the first implementation of the architecture plan, not completion of the entire 64-item product roadmap. `IMPLEMENTATION_STATUS.csv` preserves every original acceptance criterion and records the current evidence or remaining work. “Implemented” describes the bounded code path; it does not certify a production integration, all providers, all devices or all languages.
 
+## Batch diagnostics (0.5.11)
+
+Settings/History Report now defaults to all saved regular chats, exported as one ZIP containing a JSON batch. Each chat retains the single-report contract; the index groups observed models, recording versions, run states, failure codes and trace gaps without treating runtime completion as independent proof of success. Trace retention supports 20 recently traced chats with bounded per-chat history. Temporary/privacy boundaries remain; old discarded details cannot be restored. This improves KAI-048 evaluation evidence and does not change the agent, solve the document/email behavior, or complete live conformance. See `docs/CHAT-REPORTS.md` and `qa/0.5.11/VALIDATION.md`.
+
 ## Joint request budgeting (0.5.10)
 
 The 0.5.9 report fails locally before its tenth inference request: broad tool discovery, retained research and native continuation/definitions exceed the combined request allowance. The registry previously used a fixed independent allocation. Preserving the newest result exposed this missing coordination; earlier replay omitted the private continuation data.
