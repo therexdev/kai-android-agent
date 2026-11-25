@@ -54,8 +54,7 @@ class DocumentContentGuard(
     private fun created(task: AgentTask): Boolean {
         if (!accepted(task)) return false
         val intent = task.intent ?: return false
-        return intent.toolName in setOf("GOOGLEDOCS_CREATE_DOCUMENT", "GOOGLEDOCS_CREATE_DOCUMENT_MARKDOWN") ||
-            (intent.toolName == "GOOGLEDRIVE_CREATE_FILE" && runCatching { JSONObject(intent.argumentsJson).optString("mimeType") }.getOrNull() == "application/vnd.google-apps.document")
+        return runCatching { DocumentResources.createsDocument(intent.toolName,JSONObject(intent.argumentsJson)) }.getOrDefault(false)
     }
 
     /** Do not turn a completion correction into a second create/append. */
@@ -74,7 +73,7 @@ class DocumentContentGuard(
             throw ConnectionServiceException("An earlier document action has an unconfirmed outcome. Read its status or ask the user; never repeat it.")
         if (relevant.any { accepted(it) && containsText(it) })
             throw ConnectionServiceException("The requested text update was already accepted. Read the document to verify it; do not insert the text again.")
-        if (relevant.any(::created) && tool.id in setOf("GOOGLEDOCS_CREATE_DOCUMENT", "GOOGLEDOCS_CREATE_DOCUMENT_MARKDOWN", "GOOGLEDRIVE_CREATE_FILE"))
+        if (relevant.any(::created) && tool.id in DocumentResources.creates)
             throw ConnectionServiceException("The document was already created. Use its returned ID to add the missing body text; do not create another document.")
     }
 
@@ -89,7 +88,7 @@ class DocumentContentGuard(
             if(writes.any { com.kai.agent.runtime.DocumentVerification.evaluate(it,relevant).status == com.kai.agent.runtime.DocumentVerification.Status.TEXT_DIFFERS })
                 return ReplyCheck(fallback="The document write was accepted, but a later read returned different body text. I haven't submitted another update." +
                     relevant.mapNotNull(ResourceReuseGuard::documentUrl).distinct().joinToString("\n",prefix="\n\n"))
-            if(corrections++ < 2) return ReplyCheck(correction="The document body write was accepted. Discover a read-only document action and read the SAME returned document ID to verify the body before claiming completion. Do not repeat the create or text insertion. If readback is unavailable, explicitly report that acceptance is unverified.")
+            if(corrections++ < 2) return ReplyCheck(correction="The document body write was accepted. Read the SAME returned document ID using a complete structured body read, or plaintext with include_tabs_content=false, include_headers=false, include_footers=false and include_footnotes=false. Truncated results, permissions and tab banners cannot verify body text. Do not repeat a read shape already reported as unsupported. Do not repeat the create or text insertion. If readback is unavailable, explicitly report that acceptance is unverified.")
             return ReplyCheck(fallback="The service accepted the document text, but I couldn't independently verify its contents." +
                 relevant.mapNotNull(ResourceReuseGuard::documentUrl).distinct().joinToString("\n",prefix="\n\n"))
         }

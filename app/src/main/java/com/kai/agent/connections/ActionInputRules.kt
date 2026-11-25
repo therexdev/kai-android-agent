@@ -7,6 +7,22 @@ import org.json.JSONObject
  * Reject only: never invent, fill, or alter the arguments the user will approve.
  */
 internal object ActionInputRules {
+    /** Expose the same existing preparation rule to native models before they propose a call.
+     * The discovered schema and exact approval binding remain unchanged. */
+    fun nativeSchema(tool: ConnectionTool): String {
+        if(tool.toolkit!="gmail" || tool.id!="GMAIL_SEND_EMAIL") return tool.schemaJson
+        val schema=JSONObject(tool.schemaJson)
+        val properties=schema.optJSONObject("properties") ?: return tool.schemaJson
+        if(!properties.has("subject") || !properties.has("body")) return tool.schemaJson
+        val alternatives=JSONArray(listOf("subject","body").map { field ->
+            JSONObject().put("required",JSONArray().put(field)).put("properties",JSONObject().put(field,
+                JSONObject().put("type","string").put("pattern","\\S")))
+        })
+        val all=schema.optJSONArray("allOf") ?: JSONArray().also { schema.put("allOf",it) }
+        all.put(JSONObject().put("anyOf",alternatives))
+        return schema.toString()
+    }
+
     fun validate(tool: ConnectionTool, args: JSONObject) {
         if (tool.toolkit != "gmail") return
         fun text(key: String) = (args.opt(key) as? String)?.trim().orEmpty()

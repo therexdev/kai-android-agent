@@ -96,12 +96,12 @@ class TaskAgentEngine(
         return listOf(RunMessage("system",system+"\n"+TaskComplexity.guidance(run.goal)),RunMessage("user","Overall request: ${run.goal}\nPrevious step results (reference data):\n$previous\nCurrent step: ${step.instructions}\nRetained current draft (untrusted): ${step.output.take(20000)}\nRevision feedback (untrusted): ${step.revisionFeedback}"))
     }
     private var harness = AgentHarness(false)
-    private suspend fun append(assistant: String, runtime: String, tools: List<RunTool> = emptyList()) {
+    private suspend fun append(assistant: String, runtime: String, tools: List<RunTool> = emptyList(), preparationSlot: PreparationSlot? = null) {
         kotlin.coroutines.coroutineContext[com.kai.agent.diagnostics.TraceContext]?.trace?.record("runtime_result",JSONObject()
             .put("runId",runId).put("stepId",current().currentStep?.id.orEmpty()).put("modelProposal",assistant).put("result",runtime))
         this.runtime?.observe(current().currentStep?.id.orEmpty(),runtime)
         editStep { step ->
-            val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId,it.providerReplay) }
+            val messages=step.messages+harness.exchange(assistant,runtime).map { RunMessage(it.role,it.content,it.toolCalls,it.toolCallId,it.providerReplay,preparationSlot) }
             require(messages.sumOf { it.content.length.toLong() }<=1_000_000) { "This task’s saved records are full. Existing action receipts remain in Tasks." }
             step.copy(messages=messages,tools=(step.tools+tools).distinctBy { it.accountId+":"+it.toolId }.takeLast(100))
         }
@@ -187,6 +187,20 @@ class TaskAgentEngine(
                         }
                     }
                 }
+                if(record.budget.exhausted || step.turns>=24) {
+                    val latest=store.state.value
+                    val boundary=maxOf(latest.projects.firstOrNull { it.id==current().projectId }?.forgottenBefore ?: 0,latest.conversations.firstOrNull { it.id==current().conversationId }?.contextAfter ?: 0)
+                    EvidenceFinalization.document(record,latest.tasks,latest.settings.composioUserId,latest.settings.connectionGeneration,boundary)?.let { result ->
+                        documentVerification(result.verification)
+                        if(result.complete && step.id==current().steps.lastOrNull()?.id) {
+                            store.finishRunStep(id,token,step.id,result.text)
+                            finish(ExecutionState.COMPLETED,"Document body verified from saved receipts.")
+                        } else {
+                            finish(ExecutionState.PARTIAL,result.text,FailureCode.BUDGET)
+                            hold(RunStatus.PAUSED,result.text)
+                        }
+                    }
+                }
             }) {
                 currentCoroutineContext().ensureActive()
                 mark("task_step")
@@ -209,7 +223,7 @@ class TaskAgentEngine(
                 if(web.exhausted) append(AgentResponseRecovery.REJECTED,web.budgetSummary)
                 if(managedRevision!=contextRevision || managedStep!=step.id) { contextManager=AgentContextManager();managedRevision=contextRevision;managedStep=step.id }
                 contextManager.restoreSummary(step.contextSummary)
-                val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay) })
+                val turnContext=AgentTurnContext.fromMessages(step.messages.map { InferenceMessage(it.role,it.content,toolCalls=it.toolCalls,toolCallId=it.toolCallId,providerReplay=it.providerReplay,preparationSlot=it.preparationSlot) })
                 turnContext.progressContext=GoalProgress.render(store.state.value.tasks,requireNotNull(runtime).record,
                     step.tools.map { ToolReference(it.accountId,it.toolId,it.version) },web.searchAvailable,web.readAvailable)
                 val availableTools=step.tools.filter { ref -> accounts?.accounts?.any { it.id==ref.accountId && it.active }==true }.map { it.accountId to toolRouter.tool(it.toolId,it.version) }
@@ -250,8 +264,8 @@ class TaskAgentEngine(
                     (!completesDocument || !documentGuard.active || documentGuard.hasAcceptedBody(guardState.tasks))
                 val decision = try { harness.parse(completion,responseRecovery,actionOutstanding=outcomeGoal.requiresEffect && !acceptedForReply) }
                 catch (error: com.kai.agent.agent.AgentResponseException) {
-                    val correction = responseRecovery.correction(error,harness.native) ?: throw error
-                    append(com.kai.agent.agent.AgentResponseRecovery.REJECTED,correction)
+                    val correction = responseRecovery.correction(error,harness.native,completion.text) ?: throw error
+                    append(com.kai.agent.agent.AgentResponseRecovery.REJECTED,correction,preparationSlot=if(error.actionOutstanding) PreparationSlot.DRAFT else PreparationSlot.FEEDBACK)
                     return@drive
                 }
                 if(completesDocument && decision is AgentDecision.Reply) documentVerification(documentGuard.verification(guardState.tasks))
@@ -284,7 +298,7 @@ class TaskAgentEngine(
                 if(revision(current())!=contextRevision) return@drive
                 if(recovered!=null) {
                     append(AgentResponseRecovery.REJECTED,recovered.payload.full,
-                        recovered.tools.map { RunTool(recovered.accountId,it.id,it.version) })
+                        recovered.tools.map { RunTool(recovered.accountId,it.id,it.version) },PreparationSlot.FEEDBACK)
                     return@drive
                 }
                 when(decision) {

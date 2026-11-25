@@ -80,4 +80,15 @@ class RunControllerTest {
         assertEquals(listOf("write:read"),restored.events.filter { it.kind=="document_text_verified" }.map { it.code })
     }
 
+    @Test fun verifiedOutcomeCanFinalizeAtTheBudgetBoundaryWithoutInferenceOrLosingOwnership()=runTest {
+        val repo=Repository();val session=RunController(repo).open(record().copy(budget=RunBudget(modelSteps=2,maxModelSteps=2)))
+        var calls=0
+        session.drive(settlePending={
+            documentVerification(listOf("write" to DocumentVerification.Evidence(DocumentVerification.Status.TEXT_MATCHED,"read",123)))
+            finish(ExecutionState.COMPLETED,"Saved receipt")
+        }) { calls++ }
+        assertEquals(0,calls);assertEquals(ExecutionState.COMPLETED,repo.saved?.state)
+        assertEquals(1,repo.saved?.events?.count { it.kind=="document_text_verified" })
+    }
+
 }

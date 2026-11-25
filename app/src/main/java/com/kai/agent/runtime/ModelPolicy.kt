@@ -15,7 +15,7 @@ class ModelPolicy(private val fallbacks: List<ProviderConfig>) {
     fun next(current: ProviderConfig, error: InferenceException): ProviderConfig? {
         tried+=current.modelId
         if((error.retryAfterMillis ?: 0)>30000) return null
-        if(error.failureCode !in setOf(FailureCode.OUTPUT_EXHAUSTED,FailureCode.REASONING_ONLY,FailureCode.OVERLOAD,FailureCode.RATE_LIMIT,FailureCode.TIMEOUT)) return null
+        if(error.failureCode !in setOf(FailureCode.MODEL_UNAVAILABLE,FailureCode.OUTPUT_EXHAUSTED,FailureCode.REASONING_ONLY,FailureCode.OVERLOAD,FailureCode.RATE_LIMIT,FailureCode.TIMEOUT)) return null
         return fallbacks.firstOrNull {
             it.modelId !in tried && it.endpoint==current.endpoint && it.apiKey==current.apiKey &&
                 it.creditWallet==current.creditWallet && it.freeOnly==current.freeOnly && it.provider==current.provider &&

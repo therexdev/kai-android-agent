@@ -5,7 +5,7 @@ import java.util.UUID
 
 enum class RunStatus { QUEUED, RUNNING, PAUSED, NEEDS_APPROVAL, BLOCKED, COMPLETED, FAILED, CANCELLED }
 enum class StepStatus { PENDING, RUNNING, COMPLETED, SKIPPED }
-data class RunMessage(val role: String, val content: String, val toolCalls: List<com.kai.agent.inference.ToolCall> = emptyList(), val toolCallId: String = "", val providerReplay: com.kai.agent.inference.ProviderReplay? = null)
+data class RunMessage(val role: String, val content: String, val toolCalls: List<com.kai.agent.inference.ToolCall> = emptyList(), val toolCallId: String = "", val providerReplay: com.kai.agent.inference.ProviderReplay? = null, val preparationSlot: com.kai.agent.inference.PreparationSlot? = null)
 data class RunTool(val accountId: String, val toolId: String, val version: String)
 data class RunStep(
     val id: String = newId(), val title: String, val instructions: String,
