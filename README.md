@@ -4,17 +4,15 @@ A local-first AI assistant and agent for Android, powered by the Koinos AI model
 
 **[Download the latest APK](https://github.com/therexdev/kai-android-agent/releases/latest)** · **[Koinos AI](https://koinosai.com/)**
 
-## Test release: 0.5.10
+## Test release: 0.5.11
 
-The signed 0.5.10 test APK is distributed directly. The latest published release remains available above.
+The signed 0.5.11 test APK is distributed directly. The latest published release remains available above.
 
-Native tool definitions and messages now share one request budget. The planner reserves the current request, research, latest tool result and encrypted continuation before selecting optional schemas. Deferred actions remain inspectable. This fixes the independent registry allocation that could stop research at broad tool discovery even with a large model context window.
+**Settings → Report → All saved chats → Save report** now saves one ZIP containing a JSON report for comparing batches of attempts. All saved regular chats are included with separate transcripts, tasks, runs and diagnostics, plus an index of models, recorded outcomes and missing evidence. This chat only remains available. Temporary chats are excluded and credentials are filtered; personal content remains.
 
-Latest results and selected schemas remain intact. No retry allowance, context limit, automatic argument repair or approval rule is expanded. Numeric diagnostics expose request component sizes without exporting continuation contents.
+Trace retention now supports the 20 most recently traced chats, bounded to 2,000 events / 4,000,000 characters each. Previously discarded details cannot be recovered. Batch export streams one chat at a time without a plaintext staging cache. This update changes reporting, not agent behavior.
 
-See [the diagnosis and correction](docs/JOINT-REQUEST-BUDGET.md), [validation](qa/0.5.10/VALIDATION.md) and [phone checks](qa/0.5.10/RELEASE.md). Private reconstruction uses surrogate data for omitted native definitions and encrypted continuation; scripted tests do not prove live model completion.
-
-Install over the existing preview app. Schema 3, package and signing identity are retained. No server update is required. Physical 0.5.10 validation remains open.
+See [chat reports](docs/CHAT-REPORTS.md), [validation](qa/0.5.11/VALIDATION.md) and [phone checks](qa/0.5.11/RELEASE.md). Install over the existing preview app. Schema 3, package and signing identity are retained. No server update is required.
 
 ## Account features
 
@@ -39,7 +37,7 @@ The catalog comes from your signed-in Koinos AI account. GPT OSS uses the catalo
 | Web research | Search and page reading from the phone using the chosen model; internet is required. |
 | Connected apps | Composio integrations configured with the phone owner's own project key and user identity. |
 | Shared AI credits | Website account sign-in, free allowance, linked-wallet balances, and the live model catalog. |
-| Diagnostics | User-initiated chat report export with credential filtering. Review personal content before sharing. |
+| Diagnostics | User-initiated single/all-chats report export with credential filtering. Review personal content before sharing. |
 
 The phone owns conversation history, memory, task records, files, and permissions. Model inference runs through Koinos AI; on-phone language-model inference is not included in this build. A desktop KAI installation is not required.
 

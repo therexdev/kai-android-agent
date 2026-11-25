@@ -46,6 +46,26 @@ class MainActivity : ComponentActivity() {
             catch (_: Exception) { model.reportError("The export could not be saved. Choose another location and try again.") }
         }
     }
+    private val exportAllReports = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val pending = model.consumeAllChatReportExport()
+        if (uri != null && !pending) model.reportError("The app restarted before the report was saved. Please export it again.")
+        if (uri != null && pending) lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri, "wt")?.use { model.writeAllChatReports(it) }
+                        ?: error("The file could not be opened.")
+                }
+                android.widget.Toast.makeText(this@MainActivity, "All chats report saved", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // A partial batch is not a valid report. Do not leave it looking like a successful save.
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                    runCatching { android.provider.DocumentsContract.deleteDocument(contentResolver, uri) }
+                }
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                model.reportError("The report could not be saved completely. Discard any partial file and export again.")
+            }
+        }
+    }
     private val importDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) lifecycleScope.launch {
             try {
@@ -84,6 +104,10 @@ class MainActivity : ComponentActivity() {
                     is KaiViewModel.AppEvent.OpenUrl -> {
                         val uri = Uri.parse(event.url)
                         if (uri.scheme == "https") runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }.onFailure { model.reportError("No browser is available to open the sign-in page.") }
+                    }
+                    KaiViewModel.AppEvent.ExportAllChatReports -> {
+                        model.stageAllChatReportExport()
+                        exportAllReports.launch("kai-all-chats-report-${java.time.LocalDate.now()}.zip")
                     }
                     is KaiViewModel.AppEvent.ExportJson -> { model.stageExport(event.text); exportDocument.launch(event.fileName) }
                     KaiViewModel.AppEvent.RequestNotifications -> if(android.os.Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(this@MainActivity,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)notifications.launch(Manifest.permission.POST_NOTIFICATIONS)

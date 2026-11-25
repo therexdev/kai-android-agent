@@ -1,0 +1,12 @@
+{
+  "file": "KAI-Android-0.5.11.apk",
+  "bytes": 125808587,
+  "sha256": "0b6aceac29521c38e1fe3562983fd323f035d59f1291072eb8625285523be121",
+  "package": "com.kai.agent.preview",
+  "version": "0.5.11",
+  "versionCode": 51,
+  "abi": "arm64-v8a",
+  "certificateSha256": "a6b0360e7512c4f9f9d6279b52b8ca94d3eb72f6edcf8d7295d117c76b6d3d89",
+  "zipAlignmentPageKiB": 16,
+  "debuggable": false
+}

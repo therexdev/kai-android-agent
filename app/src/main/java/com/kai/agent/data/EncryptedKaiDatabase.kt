@@ -244,8 +244,20 @@ internal class EncryptedKaiDatabase(context: Context) {
                     db.execSQL("UPDATE diagnostic_stats SET dropped=dropped+1 WHERE conversation_id=?", arrayOf(conversation))
                 }
             }
-            prune("WHERE conversation_id=?", arrayOf(cid), 1_000_000, 500)
-            prune("", emptyArray(), 4_000_000, 4000)
+            prune("WHERE conversation_id=?", arrayOf(cid), com.kai.agent.diagnostics.DiagnosticRetention.CHAT_CHARACTERS,
+                com.kai.agent.diagnostics.DiagnosticRetention.CHAT_EVENTS)
+            // Bound the number of traced chats using the existing index, without decrypting/scanning
+            // every other chat's payload on every event. Per-chat limits bound total retained text.
+            val expired = mutableListOf<Pair<String, Long>>()
+            db.rawQuery("SELECT conversation_id,COUNT(*) FROM diagnostics GROUP BY conversation_id ORDER BY MAX(seq) DESC LIMIT -1 OFFSET ?",
+                arrayOf(com.kai.agent.diagnostics.DiagnosticRetention.ACTIVE_CHATS.toString())).use { c ->
+                while (c.moveToNext()) expired += c.getString(0) to c.getLong(1)
+            }
+            expired.forEach { (conversation, count) ->
+                db.execSQL("DELETE FROM diagnostics WHERE conversation_id=?", arrayOf(conversation))
+                db.execSQL("INSERT OR IGNORE INTO diagnostic_stats(conversation_id,dropped) VALUES(?,0)", arrayOf(conversation))
+                db.execSQL("UPDATE diagnostic_stats SET dropped=dropped+? WHERE conversation_id=?", arrayOf<Any>(count,conversation))
+            }
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
     }

@@ -41,11 +41,13 @@ class ChatDiagnosticsTest {
         assertFalse(mixed.contains(secret)); assertFalse(mixed.contains("unconfigured-url-token"))
     }
     @Test fun oversizedEventsStayValidAndExplicitlyMarked() {
-        val input=JSONObject().put("sessionId","session-1").put("event","connection_response").put("a","x ".repeat(70000)).put("b","y ".repeat(70000))
+        val input=JSONObject().put("sessionId","session-1").put("recordedAppVersion","0.5.11").put("recordedAppVersionCode",51).put("event","connection_response").put("a","x ".repeat(70000)).put("b","y ".repeat(70000))
         val result=redactor.event(input)
         assertTrue(result.length<=DiagnosticRedactor.MAX_EVENT_CHARS)
         assertTrue(JSONObject(result).getBoolean("truncated"))
         assertEquals("session-1",JSONObject(result).getString("sessionId"))
+        assertEquals("0.5.11",JSONObject(result).getString("recordedAppVersion"))
+        assertEquals(51,JSONObject(result).getInt("recordedAppVersionCode"))
     }
     @Test fun binaryFieldsAndEscapingCannotBypassBounds() {
         assertFalse(redactor.event(JSONObject().put("data","YWJj".repeat(1000))).contains("YWJj"))

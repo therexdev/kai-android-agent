@@ -129,6 +129,7 @@ class KaiStore(context: Context) {
                 committed.tasks.filter { task -> before.tasks.firstOrNull { it.id==task.id } != task &&
                     committed.conversations.any { it.id==task.conversationId && !it.temporary } }.forEach { task ->
                     try { database.appendDiagnostic(task.conversationId,redactor.event(JSONObject().put("at",now()).put("event","task_state")
+                        .put("recordedAppVersion",com.kai.agent.BuildConfig.VERSION_NAME).put("recordedAppVersionCode",com.kai.agent.BuildConfig.VERSION_CODE)
                         .put("data",JSONObject().put("taskId",task.id).put("intentId",task.intent?.id.orEmpty()).put("status",task.status.name)
                             .put("tool",task.intent?.toolName.orEmpty()).put("accountId",task.intent?.accountId.orEmpty())
                             .put("approvedAt",task.approvedAt ?: JSONObject.NULL).put("submittedAt",task.submittedAt ?: JSONObject.NULL))))
@@ -463,7 +464,8 @@ class KaiStore(context: Context) {
             withContext(Dispatchers.IO) { mutex.withLock {
                 try {
                     if(loaded && database.diagnosticEpoch()==epoch && mutableState.value.conversations.any { it.id==cid && !it.temporary })
-                        database.appendDiagnostic(cid, redactor.event(event.put("purpose",purpose)))
+                        database.appendDiagnostic(cid, redactor.event(event.put("purpose",purpose)
+                            .put("recordedAppVersion",com.kai.agent.BuildConfig.VERSION_NAME).put("recordedAppVersionCode",com.kai.agent.BuildConfig.VERSION_CODE)))
                 } catch(_: Exception) { diagnosticWriteFailures++ } // Logging must never trigger action replay.
             } }
         }
@@ -474,36 +476,26 @@ class KaiStore(context: Context) {
         val current=mutableState.value
         val conversation=current.conversations.firstOrNull { it.id==cid } ?: error("This conversation was removed.")
         require(!conversation.temporary) { "Temporary chats are not recorded. Use a regular chat to collect a report." }
-        val trace=database.diagnosticReport(cid)
-        val report=JSONObject().put("format","kai-chat-report").put("version",1).put("exportedAt",now())
-            .put("app",JSONObject().put("version",com.kai.agent.BuildConfig.VERSION_NAME).put("versionCode",com.kai.agent.BuildConfig.VERSION_CODE)
-                .put("androidSdk",android.os.Build.VERSION.SDK_INT).put("androidRelease",android.os.Build.VERSION.RELEASE))
-            .put("notice","Contains personal chat, relevant model context, action arguments and service results. Credentials are filtered; review before sharing. No automatic upload. This is a diagnostic snapshot, not an importable backup.")
-            .put("coverage",JSONObject().put("recordingSinceVersion","0.4.20").put("writeFailuresThisProcess",diagnosticWriteFailures)
-                .put("eventCount",trace.getJSONArray("events").length()).put("droppedEvents",trace.getLong("droppedEvents"))
-                .put("lastPrivacyResetAt",trace.getLong("lastPrivacyResetAt"))
-                .put("limits","Newest 500 events / 1,000,000 characters per chat; 4,000,000 characters across chats. Large fields are marked truncated. Privacy changes clear traces. Earlier internal steps cannot be reconstructed.")
-                .put("memoryRecordingSinceVersion","0.4.26")
-                .put("notCaptured","Audio, attachment bytes, provider-internal reasoning and server-side logs. Background memory extraction before 0.4.26. Missing end events may indicate interruption; absence is not proof of non-execution."))
-            .put("memory",JSONObject().put("savingMode",current.settings.memoryMode.name).put("enabled",current.settings.memoryEnabled)
-                .put("jobs",org.json.JSONArray(current.memoryGraph.jobs.filter { it.conversationId == cid }.map { job ->
-                    JSONObject().put("id",job.id).put("sourceMessageId",job.sourceMessageId).put("status",job.status.name)
-                        .put("extractionVersion",job.extractionVersion).put("attempts",job.attempts).put("error",job.error)
-                })))
-            .put("conversation",KaiJson.conversation(conversation))
-            .put("tasks",org.json.JSONArray(current.tasks.filter { it.conversationId==cid }.map(KaiJson::task)))
-            .put("runs",org.json.JSONArray(current.executions.filter { it.conversationId==cid }.map { r ->
-                JSONObject().put("id",r.id).put("state",r.state.name).put("origin",r.origin.name).put("sourceId",r.sourceId)
-                    .put("failureCode",r.failure?.name ?: JSONObject.NULL).put("modelSteps",r.budget.modelSteps)
-                    .put("inputTokens",r.budget.inputTokens).put("outputTokens",r.budget.outputTokens).put("artifactCount",r.artifacts.size)
-                    .put("inferenceAllowance",com.kai.agent.runtime.InferenceLedgerJson.write(r.budget.inference))
-                    .put("researchEvidence",com.kai.agent.web.ResearchEvidenceJson.write(r.research))
-                    .put("progress",com.kai.agent.runtime.RunProgressJson.write(r.progress))
-                    .put("events",org.json.JSONArray(r.events.map { e -> JSONObject().put("sequence",e.sequence).put("at",e.at).put("kind",e.kind).put("code",e.code) }))
-            }))
-            .put("trace",trace.getJSONArray("events"))
-        (com.kai.agent.diagnostics.DiagnosticRedactor(current.settings).clean(report) as JSONObject).toString(2)
+        com.kai.agent.diagnostics.ChatReportWriter.report(current, conversation, database.diagnosticReport(cid),
+            reportApp(), diagnosticWriteFailures, now()).toString(2)
     } }
+
+    /** Streams one redacted chat at a time, under the same snapshot/privacy lock. No plaintext staging file. */
+    suspend fun writeAllChatReports(writer: java.io.Writer) = withContext(Dispatchers.IO) { mutex.withLock {
+        loadLocked()
+        com.kai.agent.diagnostics.ChatReportWriter.writeAll(mutableState.value, writer, database::diagnosticReport,
+            reportApp(), diagnosticWriteFailures, now())
+    } }
+
+    suspend fun writeAllChatReportsArchive(output: java.io.OutputStream) = withContext(Dispatchers.IO) { mutex.withLock {
+        loadLocked()
+        com.kai.agent.diagnostics.ChatReportWriter.writeArchive(mutableState.value, output, database::diagnosticReport,
+            reportApp(), diagnosticWriteFailures, now())
+    } }
+
+    private fun reportApp() = JSONObject().put("version", com.kai.agent.BuildConfig.VERSION_NAME)
+        .put("versionCode", com.kai.agent.BuildConfig.VERSION_CODE).put("androidSdk", android.os.Build.VERSION.SDK_INT)
+        .put("androidRelease", android.os.Build.VERSION.RELEASE)
 
     /** Portable plaintext export. Configured credentials and connection identity are excluded. */
     suspend fun exportJson(): String = withContext(Dispatchers.IO) { mutex.withLock {

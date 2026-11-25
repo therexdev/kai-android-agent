@@ -39,7 +39,7 @@ val builtInKaiCharacters = listOf(
 )
 
 data class KaiMessage(val id: String, val role: KaiRole, val text: String)
-data class KaiConversation(val id: String, val title: String, val detail: String = "")
+data class KaiConversation(val id: String, val title: String, val detail: String = "", val temporary: Boolean = false)
 data class KaiTask(val id: String, val title: String, val detail: String = "", val status: KaiTaskStatus = KaiTaskStatus.QUEUED, val resultUrl: String = "", val receiptId: String = "")
 data class KaiMemory(
     val id: String,
@@ -225,6 +225,7 @@ interface KaiUiActions {
     fun selectConversation(id: String)
     fun deleteConversation(id: String)
     fun exportChatReport(id: String) {}
+    fun exportAllChatReports() {}
     fun exportData()
     fun importData()
     fun createRun(title: String, goal: String, steps: List<String>) {}
